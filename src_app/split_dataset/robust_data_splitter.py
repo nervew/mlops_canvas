@@ -213,7 +213,13 @@ class RobustDataSplitter:
         columns : List[str], opcional
             Columnas a graficar; por defecto target, stratify y metric.
         """
-        cols = columns or [self.target_column] + self.stratify_columns + ([self.metric_column] if self.metric_column else [])  # type: ignore
+        seen = set()
+        cols = []
+        for col in (columns or [self.target_column] + self.stratify_columns + ([self.metric_column] if self.metric_column else [])):
+            if col not in seen:
+                seen.add(col)
+                cols.append(col)
+
         for col in cols:
             plt.figure(figsize=(10, 6))
             data = [self.train_df[col].dropna(), self.test_df[col].dropna(), self.backtest_df[col].dropna()]  # type: ignore
