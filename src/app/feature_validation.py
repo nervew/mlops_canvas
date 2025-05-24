@@ -281,3 +281,32 @@ if __name__ == "__main__":
     validator = FeatureValidator()
     profile = validator.fit(df_train, max_categorias=4)  # max 4 categorías para considerar categórica
     validator.save_profile("profile.json")
+
+    data_erroneo = {
+        'Age': [27, 31, 19, 45, 21, None, 36, 34, 28, 27],             # None en lugar de número
+        'email': [
+            'x@example.com', 'wrong.email.com', 'z@example.com',        # email mal formado en posición 1
+            'd@example.com', None, 'e@sample.net', 'f@example',         # email mal formado en posición 6
+            'g@example.com', 'h@example.com', 'i@example.com'
+        ],
+        'signup_date': pd.to_datetime([
+            '2020-01-02', '2020-01-06', '2020-01-11', '2019-12-31',    # fecha fuera de rango para validar
+            '2020-01-08', '2020-01-09', None, '2020-01-13', 
+            '2020-01-16', '2020-01-21'
+        ], errors='coerce'),
+        'is_active': [True, False, True, True, True, False, True, None, False, True],  # None en booleana
+        'country': ['US', 'US', 'MX', 'ZZ', 'CA', 'CA', 'MX', 'US', 'MX', 'US'],    # 'ZZ' categoría inválida
+        'income': [51000, 61000, 54000, 70000, 46000, 63000, None, 60000, 58000, 52000],  # None en numérica
+        'phone': [
+            '123-45627890', 'INVALID_PHONE', '345-678-9012', '456-789-0123', None,
+            '678-901-2345', '789-012-3456', '890-123-4567', '901-234-5678', '012-345-6789'
+        ]
+    }
+
+    df_erroneo = pd.DataFrame(data_erroneo)
+
+    validator1 = FeatureValidator()
+    validator1.load_profile("profile.json")
+
+    report = validator1.validate(df_erroneo, reporte_path="reporte_validacion.json", max_issues_report=5)
+    print(json.dumps(report, indent=4, ensure_ascii=False))
