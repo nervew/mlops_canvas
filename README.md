@@ -95,6 +95,6 @@ Se recomienda usar ramas feature, PRs para integración y herramientas CI/CD par
 
 ## Contacto
 
-Para dudas o colaboración, contactar con el equipo de Ciencia de Datos y MLOps.
+Para dudas o colaboración, contactar con el equipo de MLOps.
 
 ---
