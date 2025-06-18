@@ -85,6 +85,10 @@ Ejemplo de clases clave:
    Validar modelo en producción, detectar drift y decidir reentrenamiento.
 
 ---
+### Arquitectura Hexagonal
+
+La carpeta `src/hexagonal` contiene una implementación opcional del pipeline basada en el patrón hexagonal. Las interfaces se definen en `ports/`, las implementaciones de infraestructura en `adapters/` y la orquestación en `use_cases/`. Esta estructura aísla la lógica de negocio de dependencias externas y facilita las pruebas.
+
 
 ## Contribuciones
 
