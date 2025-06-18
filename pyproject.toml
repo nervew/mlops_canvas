@@ -1,0 +1,32 @@
+[tool.poetry]
+name = "mlops-pipeline"
+version = "0.1.0"
+description = "Pipeline MLOps modular"
+authors = ["Mercado Libre MLOps Team"]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+pandas = "*"
+pyodbc = "*"
+psycopg2-binary = "*"
+databricks-sql-connector = "*"
+mlflow = "*"
+dvc = "*"
+
+[tool.poetry.group.dev.dependencies]
+ruff = "*"
+black = "*"
+mypy = "*"
+pytest = "*"
+
+[tool.ruff]
+line-length = 88
+
+[tool.black]
+line-length = 88
+
+[tool.mypy]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+addopts = "-q"
