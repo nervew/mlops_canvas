@@ -3,10 +3,10 @@
 ```mermaid
 flowchart TD
     A[DataRepository] --> B[TrainModelUseCase]
-    B --> C[Split Data]
-    C --> D[Feature Engineering]
-    D --> E[Feature Selection]
-    E --> F[Model Training]
+    B --> C[split_data]
+    C --> D[engineer_features]
+    D --> E[select_features]
+    E --> F[train_model]
     F --> G[ModelRepository]
-    B --> H[Evaluate Model]
+    B --> H[evaluate_model]
 ```

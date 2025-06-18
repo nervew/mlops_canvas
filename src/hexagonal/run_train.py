@@ -8,7 +8,7 @@ def main() -> None:
     model_repo = LocalModelRepository()
     use_case = TrainModelUseCase(data_repo, model_repo)
     result = use_case.execute()
-    print(f"Accuracy: {result.accuracy:.4f}")
+    print(f"Score: {result.score:.4f}")
 
 
 if __name__ == "__main__":

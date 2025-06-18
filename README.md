@@ -87,7 +87,7 @@ Ejemplo de clases clave:
 ---
 ### Arquitectura Hexagonal
 
-La carpeta `src/hexagonal` contiene una implementación opcional del pipeline basada en el patrón hexagonal. Las interfaces se definen en `ports/`, las implementaciones de infraestructura en `adapters/` y la orquestación en `use_cases/`. Esta estructura aísla la lógica de negocio de dependencias externas y facilita las pruebas.
+La carpeta `src/hexagonal` contiene una implementación opcional del pipeline basada en el patrón hexagonal. Las interfaces se definen en `ports/`, las implementaciones de infraestructura en `adapters/` y la orquestación en `use_cases/`. Cada paso del pipeline vive en un módulo separado dentro de `src/steps/` (`data_split`, `feature_engineering`, `feature_selection`, `model_training`, `model_evaluation`), facilitando la extensión con nuevas técnicas.
 
 
 ## Contribuciones
