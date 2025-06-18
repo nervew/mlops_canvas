@@ -1,0 +1,13 @@
+variables:
+  numericas: ["col1"]
+  categoricas: ["col2"]
+outliers:
+  metodo: "iqr"
+  factor: 1.5
+paths:
+  input: "data/input.csv"
+  output_report: "reports"
+graficos:
+  hist:
+    bins: 50
+    kde: true
