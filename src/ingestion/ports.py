@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import pandas as pd
 
+
 class IDataIngestionPort(ABC):
     """Interface for data ingestion adapters."""
 

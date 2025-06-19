@@ -13,11 +13,14 @@ def test_factory_returns_correct_adapter():
     adapter = ConnectorFactory.get("postgres", cfg)
     assert isinstance(adapter, PostgresAdapter)
 
-    adapter = ConnectorFactory.get("databricks", {
-        "server_hostname": "host",
-        "http_path": "path",
-        "access_token": "token",
-    })
+    adapter = ConnectorFactory.get(
+        "databricks",
+        {
+            "server_hostname": "host",
+            "http_path": "path",
+            "access_token": "token",
+        },
+    )
     assert isinstance(adapter, DatabricksSqlAdapter)
 
 
