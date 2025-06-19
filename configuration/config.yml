@@ -1,5 +1,9 @@
 inference_column: "prediction"
 target_column: "label"
+ingestion_columns:
+  - "feature1"
+  - "feature2"
+  - "feature3"
 thresholds:
   mean_diff: 0.1
   std_diff: 0.1
@@ -7,7 +11,11 @@ thresholds:
   missing: 0.05
 paths:
   output_report: "reports/inference"
+  report_path: "reports/ingestion"
   requirements: "requirements.txt"
+output:
+  report_path: "reports/ingestion"
+  databricks: "dbfs:/tmp/ingestion_report"
 validator:
   strategy: "great_expectations"
 databricks:
