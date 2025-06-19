@@ -1,0 +1,20 @@
+bundle:
+  name: "{{cookiecutter.project_name}}"
+  artifacts:
+    wheel: dist/*.whl
+
+resources:
+  jobs:
+    ingestion-validation:
+      tasks:
+        - task_key: validate
+          python_wheel_task:
+            package_name: "data_ingestion_validation"
+            entry_point: "example_use"
+          existing_cluster_id: "{{ databricks.cluster_id }}"
+
+targets:
+  prod:
+    workspace:
+      host: "{{ databricks.workspace_url }}"
+      token: "{{ databricks.token }}"
