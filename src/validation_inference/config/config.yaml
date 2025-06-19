@@ -1,0 +1,16 @@
+inference_column: "prediction"
+target_column: "label"
+thresholds:
+  mean_diff: 0.1
+  std_diff: 0.1
+  corr: 0.5
+  missing: 0.05
+paths:
+  output_report: "reports/inference"
+  requirements: "requirements.txt"
+validator:
+  strategy: "great_expectations"
+databricks:
+  workspace_url: "https://adb.example.com"
+  token: "DATABRICKS_TOKEN"
+  cluster_id: "cluster-1"

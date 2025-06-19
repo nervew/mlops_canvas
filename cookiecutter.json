@@ -1,0 +1,7 @@
+{
+  "project_name": "{{cookiecutter.project_name}}",
+  "author_name": "Mercado Libre MLOps Team",
+  "module_name": "validation_inference",
+  "description": "Cookiecutter template for inference validation module",
+  "python_version": "3.10"
+}
