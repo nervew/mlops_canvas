@@ -81,8 +81,18 @@ Ejemplo de clases clave:
 6. **Inferencia y Validación Post-Despliegue**  
    Realizar predicciones y validar la calidad de inferencias.
 
-7. **Monitoreo Continuo y Reentrenamiento**  
+7. **Monitoreo Continuo y Reentrenamiento**
    Validar modelo en producción, detectar drift y decidir reentrenamiento.
+
+### Ejemplo rápido con Iris
+
+```bash
+# Instala dependencias
+pip install -r requirements.txt
+
+# Ejecuta el pipeline completo
+python src/pipeline.py
+```
 
 ---
 
