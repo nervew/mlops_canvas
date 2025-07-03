@@ -8,4 +8,3 @@ def validate_schema(df: pd.DataFrame) -> bool:
     if "target" not in df.columns:
         return False
     return df["target"].notnull().all()
-
