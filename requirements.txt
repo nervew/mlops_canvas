@@ -1,0 +1,8 @@
+flaml>=2.1.0
+pandas>=1.5.0
+numpy>=1.22.0
+scikit-learn>=1.1.0
+joblib>=1.1.0
+skl2onnx>=1.14.0
+onnxruntime>=1.14.0
+ydata-profiling>=4.4.0

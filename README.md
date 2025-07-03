@@ -98,3 +98,48 @@ Se recomienda usar ramas feature, PRs para integración y herramientas CI/CD par
 Para dudas o colaboración, contactar con el equipo de MLOps.
 
 ---
+# MLOps Pipeline - Proyecto Ejemplo
+
+## Resumen del flujo
+
+Este pipeline automatiza el proceso de:
+
+1. **Ingesta de datos**
+2. **Análisis exploratorio univariado (EDA)**
+3. **Validación robusta de datos**
+4. **División (split) en train/test/backtest**
+5. **Búsqueda automática y entrenamiento del mejor modelo**
+6. **Guardado del modelo (joblib y ONNX, si es posible)**
+
+---
+
+## Estructura del pipeline
+
+Ingesta ▶ EDA ▶ Validación ▶ Split ▶ AutoML ▶ Guardado de modelo
+
+
+---
+
+## 📦 Qué hace cada módulo
+
+| Módulo                          | ¿Qué hace?                                                  | ¿Qué recibe?           | ¿Qué retorna?                         |
+|----------------------------------|-------------------------------------------------------------|------------------------|---------------------------------------|
+| `data_ingestion`                 | Carga datos de la fuente (CSV, base, etc.)                  | (opcional: config)     | Objeto `Dataset` con `.data` (DataFrame) |
+| `eda_univariado`                 | Analiza estadística y distribuciones de cada variable       | DataFrame              | Reporte con `.description` y/o `.html_report_path` |
+| `data_validation`                | Valida estructura, tipos, outliers, reglas aprendidas       | DataFrame, fit_profile | Objeto con `.valido` (bool), `.detalles` (dict)    |
+| `data_split`                     | Divide datos en train, test y backtest                      | DataFrame, params de split | Objeto con `.train_df`, `.test_df`, `.backtest_df` |
+| `search_model` (`flaml_wrapper`) | Busca el mejor modelo de forma automática (AutoML)          | X_train, y_train, X_test, y_test | Mejor modelo, ranking, hiperparámetros |
+| `save_model` (función)           | Guarda el modelo entrenado en joblib y ONNX (si es compatible) | Modelo, X_train        | Archivos `.joblib` y `.onnx` (si aplica) |
+
+---
+
+## ▶️ Ejecución rápida
+
+1. **Instala dependencias:**
+   ```bash
+   pip install -r requirements.txt
+
+2. para correr el pipeline desde src/
+
+   python -m app.pipeline
+
