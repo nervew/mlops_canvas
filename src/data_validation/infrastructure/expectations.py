@@ -1,11 +1,11 @@
-"""Simple validation utilities for the Iris dataset."""
-
 import pandas as pd
+from great_expectations.dataset import PandasDataset
 
+
+class IrisDataset(PandasDataset):
+    pass
 
 def validate_schema(df: pd.DataFrame) -> bool:
-    """Check that target column exists and has no nulls."""
-    if "target" not in df.columns:
-        return False
-    return df["target"].notnull().all()
-
+    ds = IrisDataset(df)
+    ds.expect_column_values_to_not_be_null('target')
+    return ds.validate().success
