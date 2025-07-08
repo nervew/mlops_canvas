@@ -1,0 +1,85 @@
+{
+    "valido": true,
+    "detalles": {
+        "checking_status": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "duration": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "credit_history": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "purpose": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "savings_status": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "employment": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "installment_commitment": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "personal_status": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "other_parties": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "residence_since": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "property_magnitude": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "age": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "other_payment_plans": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "housing": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "existing_credits": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "job": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "num_dependents": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "own_telephone": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "foreign_worker": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "target": {
+            "aprobado": true,
+            "problemas": []
+        }
+    }
+}
