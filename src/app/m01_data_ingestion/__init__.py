@@ -1,0 +1,1 @@
+from .application.service import ingest

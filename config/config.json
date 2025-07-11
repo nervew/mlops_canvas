@@ -1,7 +1,7 @@
 {
   "use_database": true,
   "db_type": "spark",
-  "query_file": "/Workspace/Users/jorgee.lopez@adres.gov.co/mlops_canvas/src/queries/query.sql",
-  "output_folder": "/Workspace/Users/jorgee.lopez@adres.gov.co/mlops_canvas/data/raw",
-  "output_file": "usuarios_unicos.parquet"
+  "query_file": "queries/query.sql",
+  "output_folder": "output",          
+  "output_file": "df_raw.parquet"
 }
