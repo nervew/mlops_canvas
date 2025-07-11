@@ -23,7 +23,7 @@ from sklearn.base import BaseEstimator
 # -------------------------------------------------------------------------
 
 # -------------------------- imports de la aplicación ---------------------
-from .m01_data_ingestion import ingest as ingest_data
+from .m01_data_ingestion.application.service import ingest
 from .m02_eda_univariado import run as eda_univar
 from .data_validation.application import service as validate_srv
 from .m05_data_split.application import service as split_srv
@@ -66,6 +66,7 @@ def guardar_modelo(modelo, X_muestra, version: str = "v1") -> None:
 # ========================================================================
 def run() -> None:
     # 1) -------------------- INGESTA DE DATOS ----------------------------
+    dataset = ingest()
     df = dataset.data
     print(f"📥 Ingesta completada: {len(df):,} filas – columnas: {list(df.columns)}\n")
 
@@ -83,7 +84,7 @@ def run() -> None:
 
     # 4) -------------------- SPLIT DE DATOS ------------------------------
     PARAMS_SPLIT = dict(
-        split_method="time",
+        split_method="random",
         target_column="target",
         stratify_columns=[],
         train_size=0.7,

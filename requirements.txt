@@ -8,4 +8,4 @@ matplotlib>=3.5.0
 sweetviz
 pyarrow>=10.0
 pyspark>=3.3
-py4j>=0.10
+openml
