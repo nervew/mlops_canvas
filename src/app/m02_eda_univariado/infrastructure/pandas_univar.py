@@ -54,13 +54,15 @@ def generate_sweetviz_report(
     output_path: Union[str, Path]
 ) -> None:
     """
-    Genera un reporte Sweetviz y lo guarda en ``output_path``.  
-    No abre el navegador (``open_browser=False``).
+    Genera un reporte Sweetviz y lo guarda en `output_path`.  
+    Monkey-patch para evitar el error de np.VisibleDeprecationWarning.
     """
+    # —– Monkey-patch para VisibleDeprecationWarning ——
+    if not hasattr(np, "VisibleDeprecationWarning"):
+        np.VisibleDeprecationWarning = Warning
+
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Sweetviz suele fallar con objetos datetime de tipo string.
-    # Conviértela tú antes de llamar a esta función si lo necesitas.
     report = sv.analyze(df)
     report.show_html(str(output_path), open_browser=False)
