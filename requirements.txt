@@ -6,3 +6,6 @@ flaml>=2.0.0
 skl2onnx>=1.13.0
 matplotlib>=3.5.0
 openml
+pyspark>=3.3
+py4j>=0.10
+sqlalchemy
