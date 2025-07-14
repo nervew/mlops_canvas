@@ -14,6 +14,7 @@ packages = [
   { include = "feature_selection_shap", from = "src" },
   { include = "feature_selection_permutation", from = "src" },
   { include = "feature_selection_pipeline", from = "src" },
+  { include = "feature_engineering", from = "src" },
 ]
 
 [tool.poetry.dependencies]
@@ -34,6 +35,7 @@ evidently = "*"
 nannyml = "*"
 pydeequ = "*"
 pyyaml = "*"
+scikit-learn = "*"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "*"
