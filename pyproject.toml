@@ -8,12 +8,22 @@ packages = [
   { include = "ingestion", from = "src" },
   { include = "validation_inference", from = "src" },
   { include = "data_ingestion_validation", from = "src" },
+  { include = "feature_selection_filter", from = "src" },
+  { include = "feature_selection_frame", from = "src" },
+  { include = "feature_selection_abess", from = "src" },
+  { include = "feature_selection_shap", from = "src" },
+  { include = "feature_selection_permutation", from = "src" },
+  { include = "feature_selection_pipeline", from = "src" },
   { include = "feature_engineering", from = "src" },
 ]
 
 [tool.poetry.dependencies]
 python = "^3.10"
 pandas = "*"
+scikit-learn = "*"
+abess = "*"
+shap = "*"
+shap-select = "*"
 pyodbc = "*"
 psycopg2-binary = "*"
 databricks-sql-connector = "*"
