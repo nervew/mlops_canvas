@@ -8,6 +8,7 @@ packages = [
   { include = "ingestion", from = "src" },
   { include = "validation_inference", from = "src" },
   { include = "data_ingestion_validation", from = "src" },
+  { include = "feature_selection", from = "src" },
   { include = "feature_engineering", from = "src" },
 ]
 
