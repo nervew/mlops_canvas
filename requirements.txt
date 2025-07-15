@@ -9,3 +9,6 @@ openml
 pyspark>=3.3
 py4j>=0.10
 sqlalchemy
+sweetviz
+pyarrow>=10.0
+py4j
