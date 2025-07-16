@@ -1,31 +1,38 @@
 import pandas as pd
 import sqlalchemy as sa
 from pyspark.sql import SparkSession
+from ..domain.ports import IDataSource
 
-def spark_connector(query: str) -> pd.DataFrame:
-    spark = SparkSession.builder.getOrCreate()
-    spark.sql("USE CATALOG hive_metastore") 
-    return spark.sql(query).toPandas()
+class SparkAdapter(IDataSource):
+    def __init__(self, catalog: str = "hive_metastore") -> None:
+        self.catalog = catalog
+        self.spark: SparkSession | None = None
 
-def postgres_connector(conn_str: str, query: str) -> pd.DataFrame:
-    engine = sa.create_engine(conn_str)
-    with engine.connect() as conn:
-        return pd.read_sql(query, conn)
+    def connect(self) -> None:
+        self.spark = SparkSession.builder.getOrCreate()
+        self.spark.sql(f"USE CATALOG {self.catalog}")  # Aquí corriges el problema.
 
-def sqlserver_connector(conn_str: str, query: str) -> pd.DataFrame:
-    engine = sa.create_engine(conn_str)
-    with engine.connect() as conn:
-        return pd.read_sql(query, conn)
+    def run_query(self, sql: str) -> pd.DataFrame:
+        return self.spark.sql(sql).toPandas()
 
-def get_connector(cfg: dict):
-    db_type = cfg["db_type"].lower()
-    conn_str = cfg.get("conn_str", "")
+class PostgresAdapter(IDataSource):
+    def __init__(self, conn_str: str) -> None:
+        self.conn_str = conn_str
 
-    if db_type == "spark":
-        return lambda q: spark_connector(q)
-    elif db_type == "postgres":
-        return lambda q: postgres_connector(conn_str, q)
-    elif db_type == "sqlserver":
-        return lambda q: sqlserver_connector(conn_str, q)
-    else:
-        raise ValueError(f"db_type '{db_type}' no soportado.")
+    def connect(self) -> None:
+        self.engine = sa.create_engine(self.conn_str)
+
+    def run_query(self, sql: str) -> pd.DataFrame:
+        with self.engine.connect() as conn:
+            return pd.read_sql(sql, conn)
+
+class SqlServerAdapter(IDataSource):
+    def __init__(self, conn_str: str) -> None:
+        self.conn_str = conn_str
+
+    def connect(self) -> None:
+        self.engine = sa.create_engine(self.conn_str)
+
+    def run_query(self, sql: str) -> pd.DataFrame:
+        with self.engine.connect() as conn:
+            return pd.read_sql(sql, conn)

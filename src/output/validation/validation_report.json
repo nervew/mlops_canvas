@@ -1,0 +1,29 @@
+{
+    "valido": true,
+    "detalles": {
+        "Semana": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "target": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "EPS_A": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "EPS_B": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "EPS_C": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "EPS_D": {
+            "aprobado": true,
+            "problemas": []
+        }
+    }
+}

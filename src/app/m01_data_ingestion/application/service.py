@@ -1,26 +1,16 @@
-import json
-import pandas as pd
 from pathlib import Path
-from ..infrastructure.connectors import get_connector
+import json
+from ..infrastructure.repository import IngestionRepository
+import pandas as pd
 
 def ingest() -> pd.DataFrame:
-    """
-    Lee configuración y devuelve el DataFrame resultante.
-    """
-    project_root = Path(__file__).resolve().parents[3] # src/
+    project_root = Path(__file__).resolve().parents[3]
     cfg_path = project_root.parent / "config" / "config.json"
-    cfg = json.loads(cfg_path.read_text())
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
 
-    sql_file = project_root / cfg["query_file"]
-    query = sql_file.read_text()
+    sql_path = project_root / cfg["query_file"]
+    sql_text = sql_path.read_text(encoding="utf-8")
 
-    connector = get_connector(cfg)
-    df = connector(query)
-
-    # Guardar resultado como parquet
-    output_dir = project_root.parent / cfg["output_folder"]
-    output_dir.mkdir(parents=True, exist_ok=True)
-    df.to_parquet(output_dir / cfg["output_file"], index=False)
-
-    print(f"✅ Archivo guardado en {output_dir / cfg['output_file']}")
-    return df
+    repo = IngestionRepository(cfg)
+    dataset = repo.ingest(sql_text)
+    return dataset.data
