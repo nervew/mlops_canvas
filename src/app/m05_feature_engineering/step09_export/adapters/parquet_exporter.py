@@ -12,7 +12,7 @@ class ParquetExportAdapter:
         if output_dir is None:
             # …/src/app/m05_feature_engineering/step09_export/adapters → parents[4] = src
             project_root = Path(__file__).resolve().parents[4]
-            output_dir = project_root / "data" / "processed"
+            output_dir = project_root / "data" / "processed"/"pipeline_engineering"
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 

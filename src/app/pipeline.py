@@ -51,7 +51,7 @@ PROJECT_ROOT        = Path(__file__).resolve().parent.parent
 MODELO_DIR          = PROJECT_ROOT / "models"
 RAW_DIR             = PROJECT_ROOT / "data" / "raw" / "complete"
 RAW_PARTITIONED_DIR = PROJECT_ROOT / "data" / "raw" / "partitioned"
-PROCESSED_DIR       = PROJECT_ROOT / "data" / "processed"
+PROCESSED_DIR       = PROJECT_ROOT / "data" / "processed" / "pipeline_engineering"
 
 for p in [MODELO_DIR, RAW_DIR, RAW_PARTITIONED_DIR, PROCESSED_DIR]:
     p.mkdir(parents=True, exist_ok=True)
