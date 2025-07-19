@@ -5,7 +5,6 @@ from time import perf_counter
 
 import numpy as np
 import pandas as pd
-import polars as pl
 
 from feature_selection.filtering.core.filter_roughfs import FilterRoughFS
 from feature_selection.frame.core.frame_selector import FrameSelector
@@ -25,7 +24,7 @@ TECHNIQUE_MAP = {
 
 
 def _validate_inputs(
-    dataframe: pl.DataFrame, target_column: str, sample_fraction: float
+    dataframe: pd.DataFrame, target_column: str, sample_fraction: float
 ) -> None:
     if target_column not in dataframe.columns:
         raise ValueError(f"Target column '{target_column}' not in dataframe")
@@ -34,23 +33,21 @@ def _validate_inputs(
 
 
 def _prepare_data(
-    dataframe: pl.DataFrame, target_column: str, sample_fraction: float, seed: int
+    dataframe: pd.DataFrame, target_column: str, sample_fraction: float, seed: int
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
-    df_full = dataframe.to_pandas()
-    X_full = df_full.drop(columns=[target_column])
-    y_full = df_full[target_column]
-
+    X_full = dataframe.drop(columns=[target_column])
+    y_full = dataframe[target_column]
     if sample_fraction < 1.0:
-        df_sample = df_full.sample(frac=sample_fraction, random_state=seed)
+        df_sample = dataframe.sample(frac=sample_fraction, random_state=seed)
     else:
-        df_sample = df_full
+        df_sample = dataframe
     X_sample = df_sample.drop(columns=[target_column])
     y_sample = df_sample[target_column]
     return X_full, X_sample, y_full, y_sample
 
 
 def run_feature_selection(
-    dataframe: pl.DataFrame,
+    dataframe: pd.DataFrame,
     target_column: str,
     technique: str = "filter",
     sample_fraction: float = 1.0,
@@ -59,7 +56,7 @@ def run_feature_selection(
     save_logs: bool = False,
     output_selected_only: bool = True,
 ) -> Dict[str, object]:
-    """Run scalable feature selection on a Polars DataFrame.
+    """Run scalable feature selection on a pandas DataFrame.
 
     Args:
         dataframe: Input tabular data.
@@ -79,9 +76,9 @@ def run_feature_selection(
         ValueError: If inputs are invalid or technique is unsupported.
 
     Examples:
-        >>> import polars as pl
+        >>> import pandas as pd
         >>> from feature_selection.feature_selection_task import run_feature_selection
-        >>> df = pl.DataFrame({"a": [1, 2], "b": [3, 4], "target": [0, 1]})
+        >>> df = pd.DataFrame({"a": [1, 2], "b": [3, 4], "target": [0, 1]})
         >>> res = run_feature_selection(df, "target", technique="filter")
         >>> res["selected_columns"]
         ['a', 'b']

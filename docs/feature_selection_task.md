@@ -17,7 +17,7 @@ flowchart TD
 
 ## Key Features
 
-- **Polars Input**: Accepts a `polars.DataFrame` for efficient I/O.
+- **Pandas Input**: Accepts a `pandas.DataFrame` as input.
 - **Technique Selection**: Choose among `filter`, `roughfs`, `frame`,
   `abess`, `shap`, `permutation`, or `all` to execute the whole pipeline.
 - **Sampling**: Use `sample_fraction` to operate on a subset of data when
@@ -29,7 +29,7 @@ flowchart TD
 ## Usage Example
 
 ```python
-import polars as pl
+import pandas as pd
 from feature_selection import run_feature_selection
 
 # ``df`` must contain the target column used for supervised methods
