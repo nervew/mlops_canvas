@@ -1,0 +1,4 @@
+sql_server:
+  conn_str: "Driver={SQL Server};Server=localhost;Database=mydb;UID=user;PWD=pass"
+postgres:
+  conn_str: "host=localhost dbname=mydb user=user password=pass"
