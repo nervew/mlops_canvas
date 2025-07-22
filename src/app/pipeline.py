@@ -1,97 +1,104 @@
-# /Workspace/Users/jorgee.lopez@adres.gov.co/mlops_canvas/src/app/pipeline.py
-"""
-Pipeline MLOps completo
-───────────────────────
-Incluye:
-1) Ingesta y validación
-2) Particionado train/test/backtest
-3) Pipeline de Feature Engineering (m05_feature_engineering)
-4) AutoML con FLAML
-5) Serialización del modelo en joblib y ONNX
-"""
+# src/app/run.py
+
 from __future__ import annotations
 
 # -------------------------------------------------------------------------
-# Configuración de entorno para matplotlib headless
+# Silenciar sólo los warnings de convergencia de SGD
+# -------------------------------------------------------------------------
+import warnings
+from sklearn.exceptions import ConvergenceWarning
+warnings.filterwarnings("ignore", category=ConvergenceWarning)
+
+# -------------------------------------------------------------------------
+# Librerías de sistema y ML genéricas
 # -------------------------------------------------------------------------
 import os
-os.environ["MPLBACKEND"] = "Agg"
-import matplotlib
-matplotlib.use("Agg")
-
-# -------------------------------------------------------------------------
-# Dependencias on-the-fly (opcional)
-# -------------------------------------------------------------------------
-from .m00_instalador import install_requirements
-install_requirements()
-
-# ---------------------------- imports estándar ---------------------------
-import json
 from pathlib import Path
 import joblib
 import pandas as pd
 from skl2onnx import convert_sklearn
 from skl2onnx.common.data_types import FloatTensorType
 from sklearn.base import BaseEstimator
-# -------------------------------------------------------------------------
 
-# -------------------------- imports de la aplicación ---------------------
+# -------------------------------------------------------------------------
+# 1) Instalador de dependencias
+# -------------------------------------------------------------------------
+print("▶ [1/8] Instalando requirements (si es necesario)...", flush=True)
+from .m00_instalador import install_requirements
+install_requirements()
+print("✔ [1/8] Requirements instalados.\n", flush=True)
+
+# -------------------------------------------------------------------------
+# 2) Fija backend de matplotlib
+# -------------------------------------------------------------------------
+os.environ["MPLBACKEND"] = "Agg"
+import matplotlib
+matplotlib.use("Agg")
+
+# -------------------------------------------------------------------------
+# 3) Imports de aplicación
+# -------------------------------------------------------------------------
 from .d_database import generate_synthetic_patient_data
 from .m02_eda_univariado import run as eda_univar
 from .m03_data_validation.application import service as validate_srv
 from .m04_data_split.infrastructure.robust_data_splitter import RobustDataSplitter
+from .m05_feature_engineering.pipeline_engineering import run_pipeline as fe_run
+# Aquí importamos la nueva run_pipeline de m06__feature_selection,
+# que internamente ejecuta ALL los pasos de selección con sus defaults:
+from .m06__feature_selection import run_pipeline as fs_run
 from .search_model.flaml_wrapper import FLAMLWrapper
 
-# ---- Pipeline de Feature Engineering -----------------------------------
-from .m05_feature_engineering.pipeline_engineering import run_pipeline as fe_run
 # -------------------------------------------------------------------------
-
-# --------------------------- configuración global ------------------------
+# 4) Configuración de rutas
+# -------------------------------------------------------------------------
 PROJECT_ROOT        = Path(__file__).resolve().parent.parent
 MODELO_DIR          = PROJECT_ROOT / "models"
 RAW_DIR             = PROJECT_ROOT / "data" / "raw" / "complete"
 RAW_PARTITIONED_DIR = PROJECT_ROOT / "data" / "raw" / "partitioned"
-PROCESSED_DIR       = PROJECT_ROOT / "data" / "processed" / "pipeline_engineering"
+FE_DIR              = PROJECT_ROOT / "data" / "processed" / "pipeline_engineering"
+FS_DIR              = PROJECT_ROOT / "data" / "processed" / "pipeline_selection"
 
-for p in [MODELO_DIR, RAW_DIR, RAW_PARTITIONED_DIR, PROCESSED_DIR]:
+for p in [MODELO_DIR, RAW_DIR, RAW_PARTITIONED_DIR, FE_DIR, FS_DIR]:
     p.mkdir(parents=True, exist_ok=True)
+
 # -------------------------------------------------------------------------
-
-
-# ========================================================================
 # Utilidad para guardar modelo
-# ========================================================================
+# -------------------------------------------------------------------------
 def guardar_modelo(modelo, X_muestra: pd.DataFrame, version: str = "v1") -> None:
     ruta_joblib = MODELO_DIR / f"modelo_{version}.joblib"
     joblib.dump(modelo, ruta_joblib)
-    print(f"✅ Modelo guardado en {ruta_joblib}", flush=True)
+    print(f"✔ Modelo guardado en {ruta_joblib}", flush=True)
 
-    ruta_onnx = MODELO_DIR / f"modelo_{version}.onnx"
     if isinstance(modelo, BaseEstimator):
         try:
             initial = [("input", FloatTensorType([None, X_muestra.shape[1]]))]
             modelo_onnx = convert_sklearn(modelo, initial_types=initial)
+            ruta_onnx = MODELO_DIR / f"modelo_{version}.onnx"
             ruta_onnx.write_bytes(modelo_onnx.SerializeToString())
-            print(f"✅ Modelo ONNX guardado en {ruta_onnx}", flush=True)
+            print(f"✔ Modelo ONNX guardado en {ruta_onnx}", flush=True)
         except Exception as exc:
-            print(f"⚠️  ONNX no generado: {exc}", flush=True)
+            print(f"⚠ ONNX no generado: {exc}", flush=True)
 
-
-# ========================================================================
+# -------------------------------------------------------------------------
 # Pipeline principal
-# ========================================================================
+# -------------------------------------------------------------------------
 def run() -> None:
-    # 1) -------------------- Ingesta --------------------
+    # 5) Ingesta
+    print("▶ [2/8] Generando y guardando datos sintéticos...", flush=True)
     df = generate_synthetic_patient_data()
     df.to_parquet(RAW_DIR / "df_raw.parquet")
-    print(f"📥 Ingesta completada: {len(df):,} filas")
+    print(f"✔ [2/8] Ingesta completada: {len(df):,} filas\n", flush=True)
 
-    # 2) -------------------- EDA + validación -----------
+    # 6) EDA + Validación
+    print("▶ [3/8] Ejecutando EDA univariado y validación...", flush=True)
     eda_univar(df)
-    if not getattr(validate_srv.run(df, fit_profile=True), "valido", False):
-        raise ValueError("Validación de datos fallida")
+    validacion = validate_srv.run(df, fit_profile=True)
+    if not getattr(validacion, "valido", False):
+        raise ValueError("✖ Validación de datos fallida")
+    print("✔ [3/8] Data validada correctamente\n", flush=True)
 
-    # 3) -------------------- Split ----------------------
+    # 7) Split temporal
+    print("▶ [4/8] Particionando datos (train/test/back)...", flush=True)
     splitter = RobustDataSplitter(
         df,
         split_method="time",
@@ -102,35 +109,40 @@ def run() -> None:
         backtest_size=0.1,
     )
     train_df, test_df, back_df = splitter.split_data()
-
     train_df.to_parquet(RAW_PARTITIONED_DIR / "train_df.parquet")
     test_df.to_parquet(RAW_PARTITIONED_DIR / "test_df.parquet")
     back_df.to_parquet(RAW_PARTITIONED_DIR / "backtest_df.parquet")
-    print("✅ Particiones raw guardadas en data/raw/partitioned")
+    print("✔ [4/8] Particiones raw guardadas\n", flush=True)
 
-    # 4) -------------------- Feature Engineering --------
-    print("\n⚙️  Ejecutando pipeline de Feature Engineering …")
-    fe_run()  # genera Parquet procesados en data/processed
-    print("✅ Feature Engineering finalizado")
+    # 8) Feature Engineering
+    print("▶ [5/8] Ejecutando pipeline de Feature Engineering...", flush=True)
+    fe_run()  # genera X_?_processed.parquet en FE_DIR
+    print("✔ [5/8] Feature Engineering finalizado\n", flush=True)
 
-    # 5) -------------------- Cargar datos procesados ----
-    X_train = pd.read_parquet(PROCESSED_DIR / "X_train_processed.parquet")
-    X_test  = pd.read_parquet(PROCESSED_DIR / "X_test_processed.parquet")
+    # 9) Feature Selection (todas las técnicas, con sus parámetros por defecto)
+    print("▶ [6/8] Ejecutando pipeline de Feature Selection...", flush=True)
+    # Capturamos también los logs internos (tiempos y nº features tras cada paso)
+    X_train_fs, X_test_fs, X_back_fs, fs_logs = fs_run()
+    print("✔ [6/8] Feature Selection finalizado\n", flush=True)
+    # (opcional) Ver un resumen rápido en consola:
+    for log in fs_logs:
+        print(f"   • {log['step']:<10} → {log['n_features']:>3} features, {log['time_sec']} s")
+    print()
 
-    y_train = X_train.pop("target")
-    y_test  = X_test.pop("target")
+    # 10) Preparar para AutoML: recuperamos el target de los dataframes procesados
+    y_train = pd.read_parquet(FE_DIR / "X_train_processed.parquet").pop("target")
+    y_test  = pd.read_parquet(FE_DIR / "X_test_processed.parquet").pop("target")
 
-    # 6) -------------------- AutoML FLAML ---------------
+    # 11) AutoML FLAML
+    print("▶ [7/8] Ejecutando AutoML con FLAML (regression)...", flush=True)
     automl = FLAMLWrapper(task="regression", time_budget=300, metric="mae")
-    automl.fit(X_train, y_train, X_test, y_test)
+    automl.fit(X_train_fs, y_train, X_test_fs, y_test)
+    print("\n🏆 Mejor modelo:", automl.get_best_model()[0], "\n", flush=True)
 
-    print("\n🏆 Ranking de modelos:\n", automl.get_model_ranking())
-    print("🚀 Mejor modelo:", automl.get_best_model()[0])
+    # 12) Guardar modelo
+    print("▶ [8/8] Guardando modelo final...", flush=True)
+    guardar_modelo(automl.get_best_model()[1], X_train_fs, version="v1")
+    print("✔ [8/8] Pipeline completado exitosamente.", flush=True)
 
-    # 7) -------------------- Guardar modelo -------------
-    guardar_modelo(automl.get_best_model()[1], X_train, version="v1")
-
-
-# -------------------------------------------------------------------------
-if __name__ == "__main__":  # llamada desde consola:  python -m app.pipeline
+if __name__ == "__main__":
     run()
