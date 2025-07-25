@@ -1,28 +1,22 @@
-# /Workspace/Users/jorgee.lopez@adres.gov.co/mlops_canvas/src/app/
-#    m06__feature_selection/step03_frame/core/frame_selector.py
+# /.../m06__feature_selection/step03_frame/core/frame_selector.py
 
 from __future__ import annotations
-
 from typing import List, Tuple, Optional
+
+import numpy as np
 import pandas as pd
 from sklearn.feature_selection import RFE, SequentialFeatureSelector
 from sklearn.base import BaseEstimator
+
 from ..ports.selector import IFeatureSelector
 
 
 class FrameSelector(IFeatureSelector):
     """
-    Selección híbrida de características:
-      1) SequentialFeatureSelector (forward) para quedarnos con `forward_k` features.
-      2) RFE (Recursive Feature Elimination) para refinar a `final_k` features.
-
-    Parámetros:
-      - estimator: cualquier estimador compatible con fit()/predict().
-        Si es None, por defecto LogisticRegression(max_iter=200).
-      - forward_k: número de features en el paso forward.
-      - final_k: número final de features tras RFE.
+    Selección híbrida de características sobre datos numéricos:
+      1) Forward selection (SequentialFeatureSelector) hasta forward_k.
+      2) RFE (Recursive Feature Elimination) hasta final_k.
     """
-
     def __init__(
         self,
         estimator: Optional[BaseEstimator] = None,
@@ -37,7 +31,7 @@ class FrameSelector(IFeatureSelector):
         self.selected_cols: List[str] = []
 
     def fit(self, X: pd.DataFrame, y: pd.Series) -> "FrameSelector":
-        # Paso 1: selección forward
+        # 1) Forward selection
         n_forward = max(1, min(self.forward_k, X.shape[1] - 1))
         sfs = SequentialFeatureSelector(
             self.estimator,
@@ -47,7 +41,7 @@ class FrameSelector(IFeatureSelector):
         sfs.fit(X, y)
         cols_forward = X.columns[sfs.get_support()].tolist()
 
-        # Paso 2: RFE sobre ese subconjunto
+        # 2) RFE sobre ese subconjunto
         n_final = max(1, min(self.final_k, len(cols_forward)))
         rfe = RFE(self.estimator, n_features_to_select=n_final)
         rfe.fit(X[cols_forward], y)
@@ -58,7 +52,7 @@ class FrameSelector(IFeatureSelector):
 
     def transform(self, X: pd.DataFrame) -> pd.DataFrame:
         if not self.selected_cols:
-            raise RuntimeError("Debe ejecutar primero .fit() o .fit_transform()")
+            raise RuntimeError("Ejecuta primero fit() o fit_transform()")
         return X[self.selected_cols]
 
     def fit_transform(self, X: pd.DataFrame, y: pd.Series) -> pd.DataFrame:
@@ -77,18 +71,37 @@ def frame_partitions(
     final_k: int = 2,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, FrameSelector]:
     """
-    Ajusta FrameSelector con X_train/y_train y aplica idéntica transformación
-    a X_train, X_test y X_backtest.
-
-    Parámetros extra (opcionalmente los pasas al selector):
-      - estimator: estimador a usar (por defecto LogisticRegression).
-      - forward_k, final_k: configuran los pasos de selección.
-
-    Retorna:
-      X_train_sel, X_test_sel, X_backtest_sel, selector_ajustado
+    1) Separa columnas numéricas y no-numéricas de X_train.
+    2) Ajusta FrameSelector sólo sobre las columnas numéricas de train.
+    3) Transforma train/test/backtest numéricas con el selector.
+    4) Vuelve a pegar las columnas no-numéricas intactas.
+    5) Reordena: primero las features seleccionadas, luego las no-numéricas.
     """
-    selector = FrameSelector(estimator=estimator, forward_k=forward_k, final_k=final_k)
-    X_tr = selector.fit_transform(X_train, y_train)
-    X_te = selector.transform(X_test)
-    X_ba = selector.transform(X_backtest)
+    # 1) detecta numéricas vs no-numéricas
+    num_cols     = X_train.select_dtypes(include=[np.number]).columns.tolist()
+    non_num_cols = X_train.select_dtypes(exclude=[np.number]).columns.tolist()
+
+    # 2) crea y ajusta selector sobre datos numéricos
+    selector = FrameSelector(
+        estimator=estimator,
+        forward_k=forward_k,
+        final_k=final_k,
+    )
+    # fit_transform actúa sólo sobre numéricas
+    X_tr_num = selector.fit_transform(X_train[num_cols], y_train)
+    X_te_num = selector.transform(X_test[num_cols])
+    X_ba_num = selector.transform(X_backtest[num_cols])
+
+    # 3) reensambla con las no-numéricas
+    X_tr = pd.concat([X_tr_num, X_train[non_num_cols]], axis=1)
+    X_te = pd.concat([X_te_num, X_test[non_num_cols]],  axis=1)
+    X_ba = pd.concat([X_ba_num, X_backtest[non_num_cols]], axis=1)
+
+    # 4) reordena columnas: seleccionadas + no-numéricas
+    new_order = selector.selected_cols + non_num_cols
+    X_tr = X_tr[new_order]
+    X_te = X_te[new_order]
+    X_ba = X_ba[new_order]
+
+    # 5) devuelve también el selector (fitted) para inspección
     return X_tr, X_te, X_ba, selector

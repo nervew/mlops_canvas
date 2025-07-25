@@ -1,6 +1,3 @@
-# /Workspace/Users/jorgee.lopez@adres.gov.co/mlops_canvas/src/app/
-#    m06__feature_selection/step01_import/adapters/parquet_loader.py
-
 from __future__ import annotations
 from pathlib import Path
 from typing import Tuple
@@ -59,3 +56,4 @@ class ParquetPartitionLoader2(IDataLoader):
         X_back,  y_back  = back_df.drop(columns=["target"]), back_df["target"]
 
         return X_train, X_test, X_back, y_train, y_test, y_back
+    

@@ -1,66 +1,84 @@
 # /.../m06__feature_selection/step02_filtering/core/filter_roughfs.py
 
 from __future__ import annotations
-from typing import List, Tuple
+from typing     import List, Tuple
 
-import numpy as np
-import pandas as pd
-from sklearn.feature_selection import VarianceThreshold
-from sklearn.pipeline import Pipeline
+import numpy       as np
+import pandas      as pd
+from sklearn.base import BaseEstimator, TransformerMixin
 
 from ..ports.selector import IFeatureSelector
 
 
 class FilterRoughFS(IFeatureSelector):
     """
-    Filtro inicial simple:
-      1. Elimina columnas de varianza 0.
-      2. Elimina una de cada par de columnas con |corr| > corr_threshold.
-    Compatible con Scikit-learn (fit / transform).
+    1) Elimina columnas constantes (varianza == 0).
+    2) Entre pares con |corr| > corr_threshold deja solo una.
     """
-
     def __init__(self, corr_threshold: float = 0.9) -> None:
         self.corr_threshold = corr_threshold
         self.selected_cols: List[str] = []
 
     def fit(self, X: pd.DataFrame, y: pd.Series | None = None) -> FilterRoughFS:
-        df = X.copy()
-        # 1) Elimina constantes
-        vt = VarianceThreshold(threshold=0.0)
-        vt.fit(df)
-        df = df[df.columns[vt.get_support()]]
-
-        # 2) Elimina correladas
-        corr = df.corr().abs()
-        upper = corr.where(np.triu(np.ones(corr.shape), k=1).astype(bool))
+        # 1) Quitar constantes
+        df = X.loc[:, X.std() > 0]
+        # 2) Quitar correladas
+        corr    = df.corr().abs()
+        upper   = corr.where(np.triu(np.ones(corr.shape), k=1).astype(bool))
         to_drop = [c for c in upper.columns if any(upper[c] > self.corr_threshold)]
         self.selected_cols = [c for c in df.columns if c not in to_drop]
         return self
 
     def transform(self, X: pd.DataFrame) -> pd.DataFrame:
         if not self.selected_cols:
-            raise RuntimeError("Ejecuta primero fit() antes de transform().")
+            raise RuntimeError("Primero ejecuta fit()")
         return X[self.selected_cols]
+
+
+class RoughWithDatesTransformer(BaseEstimator, TransformerMixin):
+    """
+    1) Separa numéricas vs no-numéricas.
+    2) Aplica FilterRoughFS sobre lo numérico.
+    3) Reconstruye el DataFrame con todas las columnas.
+    """
+    def __init__(self, corr_threshold: float = 0.9):
+        self.corr_threshold = corr_threshold
+
+    def fit(self, X: pd.DataFrame, y: pd.Series | None = None):
+        # columnas numéricas y no-numéricas
+        self.num_cols     = X.select_dtypes(include=[np.number]).columns.tolist()
+        self.non_num_cols = X.select_dtypes(exclude=[np.number]).columns.tolist()
+        # ajusta el filtro
+        self.filter = FilterRoughFS(corr_threshold=self.corr_threshold)
+        self.filter.fit(X[self.num_cols], y)
+        return self
+
+    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
+        # filtra solo numéricas
+        X_num = self.filter.transform(X[self.num_cols])
+        # mantiene intactas las no-numéricas
+        X_non = X[self.non_num_cols]
+        # concatena y reordena
+        X_all = pd.concat([X_num, X_non], axis=1)
+        order = self.filter.selected_cols + self.non_num_cols
+        return X_all[order]
 
 
 def filter_partitions(
     X_train: pd.DataFrame,
     X_test: pd.DataFrame,
-    X_backtest: pd.DataFrame,
+    X_back: pd.DataFrame,
     y_train: pd.Series | None = None,
-) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, Pipeline]:
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, RoughWithDatesTransformer]:
     """
-    Ajusta FilterRoughFS usando X_train (+ y_train),
-    luego aplica la misma transformación a las tres particiones.
-    Devuelve (X_train_f, X_test_f, X_backtest_f, pipeline).
+    Ajusta y devuelve un RoughWithDatesTransformer ya fitteado,
+    junto con las tres particiones transformadas.
     """
-    selector = FilterRoughFS(corr_threshold=0.9)
-    pipe = Pipeline([("rough_filter", selector)])
+    transformer = RoughWithDatesTransformer(corr_threshold=0.9)
+    transformer.fit(X_train, y_train)
 
-    pipe.fit(X_train, y_train)
+    X_tr = transformer.transform(X_train)
+    X_te = transformer.transform(X_test)
+    X_ba = transformer.transform(X_back)
 
-    X_tr = pipe.transform(X_train)
-    X_te = pipe.transform(X_test)
-    X_ba = pipe.transform(X_backtest)
-
-    return X_tr, X_te, X_ba, pipe
+    return X_tr, X_te, X_ba, transformer
