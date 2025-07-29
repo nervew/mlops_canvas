@@ -6,8 +6,8 @@
         "unique_count": 336,
         "unique_ratio": 1.0,
         "is_constant": false,
-        "min_date": "2019-02-17 00:00:00",
-        "max_date": "2025-07-20 00:00:00",
+        "min_date": "2019-02-24 00:00:00",
+        "max_date": "2025-07-27 00:00:00",
         "has_duplicates": false
     },
     "target": {

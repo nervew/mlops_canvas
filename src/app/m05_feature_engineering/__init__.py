@@ -1,19 +1,27 @@
-"""
-m05_feature_engineering
-───────────────────────
-Paquete raíz de la fase de Feature Engineering.
+from pathlib import Path
+import pandas as pd
 
-Para evitar ciclos de importación **no** cargamos los sub-módulos aquí.
-Quien necesite una clase la debe importar así, por ejemplo:
 
-    from m05_feature_engineering.step03_outliers import IQRHandler
-    from m05_feature_engineering.step02_imputation import SimpleImputerAdapter
-"""
+class ParquetExportAdapter:
+    """
+    Guarda DataFrames procesados (train, test, backtest) en formato Parquet
+    dentro de src/data/processed usando rutas relativas al proyecto.
+    """
 
-from importlib import import_module as _imp
+    def __init__(self, output_dir: Path | None = None) -> None:
+        if output_dir is None:
+            # …/src/app/m05_feature_engineering/step09_export/adapters → parents[4] = src
+            project_root = Path(__file__).resolve().parents[4]
+            output_dir = project_root / "data" / "processed"/"pipeline_engineering"
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
 
-def run_pipeline(*args, **kwargs):
-    """Proxy a m05_feature_engineering.pipeline_engineering.run_pipeline()"""
-    return _imp(__name__ + ".pipeline_engineering").run_pipeline(*args, **kwargs)
-
-__all__ = ["run_pipeline"]
+    def export(
+        self,
+        train_df: pd.DataFrame,
+        test_df: pd.DataFrame,
+        backtest_df: pd.DataFrame,
+    ) -> None:
+        train_df.to_parquet(self.output_dir / "X_train_processed.parquet")
+        test_df.to_parquet(self.output_dir / "X_test_processed.parquet")
+        backtest_df.to_parquet(self.output_dir / "X_backtest_processed.parquet")
