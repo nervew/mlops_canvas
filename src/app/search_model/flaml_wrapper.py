@@ -29,7 +29,7 @@ class FLAMLWrapper(AutoMLBase):
     def __init__(
         self,
         task: str = "auto",         # "auto", "classification" o "regression"
-        time_budget: int = 360,
+        time_budget: int = 10,
         metric: str | None = None,
         verbose: int = 0,
         log_file: str = "flaml.log",

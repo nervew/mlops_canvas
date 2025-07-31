@@ -1,7 +1,8 @@
 {
   "use_database": true,
   "db_type": "spark",
-  "query_file":"queries/query.sql",
+  "catalog": "mipres_catalog",
+  "query_file": "queries/query.sql",
   "output_folder": "mlops_canvas/data/raw",
   "output_file": "usuarios_unicos.parquet"
 }

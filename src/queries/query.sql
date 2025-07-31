@@ -1,6 +1,6 @@
 SELECT
   -- 1. Agrupar por semana (inicio de semana)
-  date_trunc('week', FechaRegistro) AS semana_registro,
+  date_trunc('week', FechaRegistro) AS semana,
 
   -- 2. Total de usuarios únicos
   COUNT(DISTINCT struct(TipoIDPaciente, NoIDPaciente)) AS usuarios_unicos,
@@ -29,13 +29,13 @@ SELECT
       THEN struct(TipoIDPaciente, NoIDPaciente)
   END) AS usuarios_ess
 
-FROM hive_metastore.db_mipres_suministro.dbo_tsum_tx
+FROM mipres_catalog.bronze_db_mipres_suministro.dbo_tsum_tx
 
 -- Opcional: puedes incluir un filtro de fechas aquí
 -- WHERE FechaRegistro BETWEEN '2024-01-01' AND current_date()
 
 GROUP BY
-  semana_registro
+  semana
 
 ORDER BY
-  semana_registro;
+  semana;

@@ -64,9 +64,12 @@ def guardar_modelo(modelo, X_muestra: pd.DataFrame, version="v1"):
     print(f"✔ Modelo guardado en {ruta}", flush=True)
     if isinstance(modelo, BaseEstimator):
         try:
-            onx = convert_sklearn(modelo,
-                                  initial_types=[("input", FloatTensorType([None, X_muestra.shape[1]]))])
-            (MODELO_DIR / f"modelo_{version}.onnx").write_bytes(onx.SerializeToString())
+            onx = convert_sklearn(
+                modelo,
+                initial_types=[("input", FloatTensorType([None, X_muestra.shape[1]]))]
+            )
+            (MODELO_DIR / f"modelo_{version}.onnx")\
+                .write_bytes(onx.SerializeToString())
             print("✔ Modelo ONNX exportado", flush=True)
         except Exception as exc:
             print(f"⚠ ONNX no generado: {exc}", flush=True)
@@ -110,11 +113,15 @@ def run() -> None:
     fe_run()
     print("✔ Feature Engineering finalizado\n", flush=True)
 
-    # 6) Feature Selection
-    print("▶ [6/10] Feature Selection...", flush=True)
-    X_tr_fs, X_te_fs, X_bk_fs, logs = fs_run()
-    for l in logs:
-        print(f"   • {l['step']:<10} → {l['n_features']:>3} feat, {l['time_sec']} s")
+    # 6) Feature Selection (filter → frame)
+    print("▶ [6/10] Feature Selection (filter → frame)...", flush=True)
+    X_tr_fs, X_te_fs, X_bk_fs, logs = fs_run(
+        techniques=["filter", "frame"],
+        save_logs=True
+    )
+    # Mostrar logs como tabla
+    print(pd.DataFrame(logs), "\n")
+
     lista_feats = [c for c in X_tr_fs.columns if c != "target"]
     lista_dir = OUTPUT_DIR / "Lista_feature_final"
     lista_dir.mkdir(parents=True, exist_ok=True)
@@ -135,8 +142,8 @@ def run() -> None:
     guardar_modelo(automl.get_best_model()[1], X_tr_fs, version="v1")
     print("✔ Modelo final guardado\n", flush=True)
 
-    # 9) Feature Reduction (m08) — último paso, PCA desactivado
-    print("▶ [9/10] Ejecutando Feature Reduction (PCA desactivado)...", flush=True)
+    # 9) Feature Reduction (m08) — último paso conectado, PCA desactivado
+    print("▶ [9/10] Ejecutando Feature Reduction ...", flush=True)
     transf_inicial = joblib.load(PROJECT_ROOT / "transformers" / "transformador_inicial.joblib")
     fr_run(
         transformer=transf_inicial,
