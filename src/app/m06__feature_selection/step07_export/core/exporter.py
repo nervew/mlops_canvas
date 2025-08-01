@@ -10,19 +10,16 @@ class DataFrameExporter(IDataExporter):
       - Usa siempre ruta relativa desde 'src'.
     """
     def __init__(self, base_path: Path | str | None = None) -> None:
-        # Ruta por defecto: ‹...›/mlops_canvas/src/data/processed/pipeline_selection
-        # Subimos 4 niveles desde este fichero (core/exporter.py → src)
         if base_path is None:
+            # Sube hasta la raíz del proyecto (mlops_canvas)
             self.export_dir = (
-                Path(__file__).resolve().parents[4]  # → 'src'
+                Path(__file__).resolve().parents[5]  # antes era [4]
                 / "data"
                 / "processed"
                 / "pipeline_selection"
             )
         else:
             self.export_dir = Path(base_path)
-
-        # Crear directorio completo si no existe
         self.export_dir.mkdir(parents=True, exist_ok=True)
 
     def export(

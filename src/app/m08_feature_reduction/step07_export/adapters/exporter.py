@@ -11,7 +11,7 @@ import numpy as np
 from ..ports.exporter import IExporter
 
 # carpeta src real (mlops_canvas/src)
-PROJECT_SRC = Path(__file__).resolve().parents[4]
+PROJECT_SRC = Path(__file__).resolve().parents[5]
 
 
 class Exporter(IExporter):

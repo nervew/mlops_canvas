@@ -99,10 +99,9 @@ def run_pipeline(
 
     # 4) (opcional) guardado de logs en disco
     if save_logs:
-        # carpeta: <proyecto>/src/output/log_selection
-        log_dir = Path(__file__).resolve().parents[2] / "output" / "log_selection"
+        # carpeta: <proyecto>/logs/log_selection
+        log_dir = Path(__file__).resolve().parents[3] / "logs" / "log_selection"
         log_dir.mkdir(parents=True, exist_ok=True)
-
         log_file = log_dir / "feature_selection_logs.json"
         log_file.write_text(json.dumps(logs, indent=2), encoding="utf-8")
 

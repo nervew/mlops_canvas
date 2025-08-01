@@ -11,29 +11,23 @@ class ParquetPartitionLoader2(IDataLoader):
 
     def __init__(
         self,
-        base_path: Path | str | None = None,
+        base_path: str | None = None,
         filename_train: str = "X_train_processed.parquet",
         filename_test: str = "X_test_processed.parquet",
         filename_backtest: str = "X_backtest_processed.parquet",
     ) -> None:
-        # ──────────────────────────────────────────────────────────────
-        # Ruta por defecto: …/src/data/processed/pipeline_engineering/
-        # (subimos 4 niveles desde adapters → src)
-        # ──────────────────────────────────────────────────────────────
         if base_path is None:
+            # Sube hasta la raíz del proyecto (mlops_canvas)
             self.base_path = (
-                Path(__file__).resolve().parents[4]   # ← 0 adapters, 1 step01_import,
-                                                     #    2 m06__feature_selection,
-                                                     #    3 app, 4 src
+                Path(__file__).resolve().parents[5]  # antes era [4]
                 / "data"
                 / "processed"
                 / "pipeline_engineering"
             )
         else:
             self.base_path = Path(base_path)
-
-        self.train_file    = self.base_path / filename_train
-        self.test_file     = self.base_path / filename_test
+        self.train_file = self.base_path / filename_train
+        self.test_file = self.base_path / filename_test
         self.backtest_file = self.base_path / filename_backtest
 
     # ------------------------------------------------------------------
@@ -56,4 +50,3 @@ class ParquetPartitionLoader2(IDataLoader):
         X_back,  y_back  = back_df.drop(columns=["target"]), back_df["target"]
 
         return X_train, X_test, X_back, y_train, y_test, y_back
-    

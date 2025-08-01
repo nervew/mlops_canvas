@@ -21,9 +21,9 @@ class ParquetPartitionLoader(IDataLoader):
         filename_backtest: str = "backtest_df.parquet",
     ) -> None:
         if base_path is None:
-            # Desde src/app/... sube 4 niveles hasta 'src', luego data/raw/partitioned
+            # Desde src/app/... sube 5 niveles hasta arriba de'src', luego data/raw/partitioned
             self.base_path = (
-                Path(__file__).resolve().parents[4]
+                Path(__file__).resolve().parents[5]
                 / "data"
                 / "raw"
                 / "partitioned"

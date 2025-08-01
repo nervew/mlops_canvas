@@ -33,6 +33,9 @@ class FeatureEngineeringPipeline:
         self.metrics  = JsonMetricsExporter()
         self.drift    = PSIDriftDetector()
 
+        # Directorio base: una carpeta arriba de src
+        self.base_dir = Path(__file__).resolve().parents[3]
+
     def run(self) -> None:
         # 1) Cargo train/test/back
         X_train, X_test, X_back, y_train, y_test, y_back = self.loader.load()
@@ -45,8 +48,8 @@ class FeatureEngineeringPipeline:
         X_test  = self.preprocess.transform(X_test)
         X_back  = self.preprocess.transform(X_back)
 
-        # 4) Serializo el pipeline ajustado
-        transformers_dir = Path(__file__).resolve().parents[2] / "transformers"
+        # 4) Serializo el pipeline ajustado en mlops_canvas/transformers
+        transformers_dir = self.base_dir / "transformers"
         transformers_dir.mkdir(parents=True, exist_ok=True)
         joblib.dump(self.preprocess, transformers_dir / "transformador_inicial.joblib")
 
@@ -56,13 +59,14 @@ class FeatureEngineeringPipeline:
         X_back_final  = X_back.copy();  X_back_final["target"]  = y_back
         self.exporter.export(X_train_final, X_test_final, X_back_final)
 
-        # 6) Métricas descriptivas
-        Path("metrics").mkdir(exist_ok=True)
-        self.metrics.export(X_train_final, "metrics/feature_metrics.json")
+        # 6) Métricas descriptivas en mlops_canvas/metrics
+        metrics_dir = self.base_dir / "metrics"
+        metrics_dir.mkdir(exist_ok=True)
+        self.metrics.export(X_train_final, str(metrics_dir / "feature_metrics.json"))
 
-        # 7) Drift train vs test
+        # 7) Drift train vs test en mlops_canvas/metrics
         drift = self.drift.compute(X_train, X_test)
-        with open("metrics/drift.json", "w", encoding="utf-8") as fh:
+        with open(metrics_dir / "drift.json", "w", encoding="utf-8") as fh:
             json.dump(drift, fh, indent=4)
 
 

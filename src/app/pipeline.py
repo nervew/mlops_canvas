@@ -45,7 +45,7 @@ from .search_model.flaml_wrapper import FLAMLWrapper
 # -------------------------------------------------------------------------
 # 6) Configuración de rutas
 # -------------------------------------------------------------------------
-PROJECT_ROOT        = Path(__file__).resolve().parent.parent
+PROJECT_ROOT        = Path(__file__).resolve().parent.parent.parent  # Subir un nivel más
 MODELO_DIR          = PROJECT_ROOT / "models"
 RAW_DIR             = PROJECT_ROOT / "data" / "raw" / "complete"
 RAW_PARTITIONED_DIR = PROJECT_ROOT / "data" / "raw" / "partitioned"
@@ -142,8 +142,8 @@ def run() -> None:
     guardar_modelo(automl.get_best_model()[1], X_tr_fs, version="v1")
     print("✔ Modelo final guardado\n", flush=True)
 
-    # 9) Feature Reduction (m08) — último paso conectado, PCA desactivado
-    print("▶ [9/10] Ejecutando Feature Reduction ...", flush=True)
+    # 9) Feature Reduction (m08) — último paso, PCA desactivado
+    print("▶ [9/10] Ejecutando Feature Reduction (PCA desactivado)...", flush=True)
     transf_inicial = joblib.load(PROJECT_ROOT / "transformers" / "transformador_inicial.joblib")
     fr_run(
         transformer=transf_inicial,

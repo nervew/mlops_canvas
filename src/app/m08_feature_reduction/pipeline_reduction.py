@@ -31,8 +31,8 @@ def run_feature_reduction(
     """
 
     # 1) INGESTA
-    project_src = Path(__file__).resolve().parents[2]   # mlops_canvas/src
-    parquet_dir = project_src / "data" / "raw" / "partitioned"
+    project_root = Path(__file__).resolve().parents[3]   # mlops_canvas
+    parquet_dir = project_root / "data" / "raw" / "partitioned"
     loader = ParquetPartitionLoader(str(parquet_dir))
     train, test, back = loader.load()
 
