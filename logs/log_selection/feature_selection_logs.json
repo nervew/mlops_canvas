@@ -1,12 +1,12 @@
 [
   {
     "step": "filter",
-    "time_sec": 0.008,
+    "time_sec": 0.0108,
     "n_features": 15
   },
   {
     "step": "frame",
-    "time_sec": 0.4076,
+    "time_sec": 0.5062,
     "n_features": 3
   }
 ]

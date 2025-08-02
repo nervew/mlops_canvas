@@ -1,5 +1,5 @@
 pandas>=1.3.0
-numpy>=1.21.0
+numpy>=1.21.0,<2.0
 scikit-learn>=1.0
 joblib>=1.1.0
 flaml[automl]>=2.0.0
@@ -13,3 +13,8 @@ sweetviz
 pyarrow>=10.0
 abess
 shap
+mljar-supervised>=1.1.1
+onnx
+onnxruntime
+onnxmltools
+lightgbm

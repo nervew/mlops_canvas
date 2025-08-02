@@ -1,21 +1,8 @@
-# m08_feature_reduction/step03_reduction/ports/reducer.py
-
-from abc import ABC, abstractmethod
-import numpy as np
+from typing import Any
 import pandas as pd
+import numpy as np
 
-class IReducer(ABC):
-    @abstractmethod
-    def fit(self, X_train: pd.DataFrame) -> None:
-        """Ajusta el reductor solo con X_train."""
-        pass
-
-    @abstractmethod
-    def transform(self, X: pd.DataFrame) -> np.ndarray:
-        """Transforma X (puede devolver array o DataFrame)."""
-        pass
-
-    @abstractmethod
-    def explained_variance_ratio(self) -> np.ndarray | None:
-        """Retorna la varianza explicada (o None si está desactivado)."""
-        pass
+class IReducer:
+    def fit(self, X: pd.DataFrame | np.ndarray) -> "IReducer": ...
+    def transform(self, X: pd.DataFrame | np.ndarray) -> np.ndarray: ...
+    def fit_transform(self, X: pd.DataFrame | np.ndarray) -> np.ndarray: ...

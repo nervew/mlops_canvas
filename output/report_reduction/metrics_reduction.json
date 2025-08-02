@@ -1,0 +1,15 @@
+{
+    "mae_anterior": 4.853651513101217,
+    "mae_reduccion": null,
+    "delta_mae": null,
+    "column_importance": [
+        {
+            "feature": "EPS_A",
+            "importance": 0.7861516157999918
+        },
+        {
+            "feature": "EPS_B",
+            "importance": 0.0
+        }
+    ]
+}

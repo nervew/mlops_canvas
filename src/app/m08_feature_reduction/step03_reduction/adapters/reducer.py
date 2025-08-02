@@ -1,39 +1,44 @@
 from sklearn.decomposition import PCA
 import numpy as np
 import pandas as pd
+
 from ..ports.reducer import IReducer
 
 class Reducer(IReducer):
+    """
+    Adaptador genérico:
+      • Si method=None  → pasa-atrás (no cambia dimensión).
+      • Si method='pca' → usa sklearn.PCA.
+    """
 
     def __init__(
         self,
-        method: str | None = 'pca',
-        n_components: int = 3,
-        random_state: int = 42
+        method: str | None = "pca",
+        n_components: int | None = 3,
+        random_state: int = 42,
     ):
         self.method = method
-        self.n_components = n_components
-        self.random_state = random_state
-        self.reducer: PCA | None = None
-        self.fitted_ = False
-
-        if self.method == 'pca':
+        if method == "pca":
             self.reducer = PCA(
-                n_components=self.n_components,
-                random_state=self.random_state
+                n_components=n_components,
+                random_state=random_state,
             )
+        else:  # None u otro → passthrough
+            self.reducer = None
 
-    def fit(self, X_train: pd.DataFrame) -> None:
-        if self.reducer:
-            self.reducer.fit(X_train.values if hasattr(X_train, "values") else X_train)
-        self.fitted_ = True
+    # ---------------- scikit-learn style ----------------
+    def fit(self, X: pd.DataFrame | np.ndarray) -> "Reducer":
+        if self.reducer is not None:
+            self.reducer.fit(X)
+        return self
 
     def transform(self, X: pd.DataFrame | np.ndarray) -> np.ndarray:
-        if not self.fitted_:
-            raise RuntimeError("Reducer: primero fit().")
-        if self.reducer:
-            return self.reducer.transform(X.values if hasattr(X, "values") else X)
-        return X.values if hasattr(X, "values") else X
+        if self.reducer is not None:
+            return self.reducer.transform(X)
+        # passthrough → devolver como np.ndarray
+        return np.asarray(X)
 
-    def explained_variance_ratio(self) -> np.ndarray | None:
-        return self.reducer.explained_variance_ratio_ if self.reducer else None
+    def fit_transform(self, X: pd.DataFrame | np.ndarray) -> np.ndarray:
+        if self.reducer is not None:
+            return self.reducer.fit_transform(X)
+        return np.asarray(X)
