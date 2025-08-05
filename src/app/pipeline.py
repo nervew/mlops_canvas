@@ -63,7 +63,7 @@ RAW_PARTITIONED_DIR = PROJECT_ROOT / "data" / "raw" / "partitioned"
 FE_DIR              = PROJECT_ROOT / "data" / "processed" / "pipeline_engineering"
 FS_DIR              = PROJECT_ROOT / "data" / "processed" / "pipeline_selection"
 OUTPUT_DIR          = PROJECT_ROOT / "output"
-LOG_DIR             = PROJECT_ROOT / "mlops_canvas" / "logs"
+LOG_DIR             = PROJECT_ROOT / "logs"
 
 for path in [MODELS_DIR, RAW_DIR, RAW_PARTITIONED_DIR, FE_DIR, FS_DIR, OUTPUT_DIR, LOG_DIR]:
     path.mkdir(parents=True, exist_ok=True)

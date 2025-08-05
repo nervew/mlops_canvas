@@ -1,11 +1,14 @@
 # search_model/flaml_wrapper.py
-
 from typing import Any
+from pathlib import Path          
 import numpy as np
 import pandas as pd
 from flaml import AutoML
-from .automl_base import AutoMLBase
 from sklearn.metrics import roc_auc_score, accuracy_score, mean_absolute_error
+
+from .automl_base import AutoMLBase
+from .export import get_log_path
+
 
 class FLAMLWrapper(AutoMLBase):
     _NAME_MAP = {
@@ -23,7 +26,7 @@ class FLAMLWrapper(AutoMLBase):
         time_budget: int = 60,
         metric: str | None = None,
         verbose: int = 0,
-        log_file: str = "mlops_canvas/logs/flaml.log",
+        log_file: str | None = None,
         preprocess: bool = False,
     ) -> None:
         super().__init__("FLAML")
@@ -31,11 +34,20 @@ class FLAMLWrapper(AutoMLBase):
         self.time_budget = time_budget
         self.metric_override = metric
         self.verbose = verbose
-        self.log_file = log_file
+
+        # Ruta de log absoluta y con directorio creado
+        self.log_file = (
+            get_log_path() if log_file is None
+            else get_log_path(Path(log_file).name)
+        )
+
         self.preprocess = preprocess
         self.automl = AutoML()
         self.raw_estimator: Any = None  # Para exportación ONNX
 
+    # ------------------------------------------------------------------ #
+    # Métodos internos
+    # ------------------------------------------------------------------ #
     def _infer_task(self, y: pd.Series) -> str:
         if self.task != "auto":
             return self.task
@@ -43,6 +55,9 @@ class FLAMLWrapper(AutoMLBase):
             return "classification"
         return "regression"
 
+    # ------------------------------------------------------------------ #
+    # API pública
+    # ------------------------------------------------------------------ #
     def fit(
         self,
         X_train: pd.DataFrame,
@@ -51,12 +66,12 @@ class FLAMLWrapper(AutoMLBase):
         y_test: pd.Series,
     ) -> None:
         task = self._infer_task(y_train)
-        if task == "classification":
-            metric = self.metric_override or (
-                "roc_auc" if y_train.nunique() == 2 else "roc_auc_ovr"
-            )
-        else:
-            metric = self.metric_override or "mae"
+        metric = (
+            self.metric_override
+            or ("roc_auc" if task == "classification" and y_train.nunique() == 2 else
+                "roc_auc_ovr" if task == "classification" else
+                "mae")
+        )
 
         settings = {
             "task": task,
@@ -69,7 +84,7 @@ class FLAMLWrapper(AutoMLBase):
             "model_history": True,
         }
 
-        # Entrena el AutoML de FLAML (incluye transformaciones internas)
+        # Entrena FLAML
         self.automl.fit(
             X_train=X_train,
             y_train=y_train,
@@ -78,40 +93,32 @@ class FLAMLWrapper(AutoMLBase):
             **settings
         )
 
-        # Guardar el estimador puro para exportación ONNX
+        # Resultados
         self.raw_estimator = self.automl.model.estimator
-
-        # Guardar los mejores hiperparámetros
         self.best_params = dict(self.automl.best_config)
 
-        # Construir ranking de modelos probados
+        # Ranking
         records = []
         for est, loss in self.automl.best_loss_per_estimator.items():
-            # En clasificación, loss = 1 - score; en regresión, loss = error
             metric_value = (1 - loss) if task == "classification" else loss
             records.append({
                 "estimator_name": self._NAME_MAP.get(est, est),
                 "metric": metric_value
             })
 
-        ascending = task != "classification"
         self.model_ranking = (
             pd.DataFrame(records)
-              .sort_values("metric", ascending=ascending)
+              .sort_values("metric", ascending=(task != "classification"))
               .reset_index(drop=True)
         )
 
     def predict(self, X: pd.DataFrame) -> np.ndarray:
-        # Usa la lógica interna de FLAML (transformaciones + predictor)
         return self.automl.predict(X)
 
     def predict_proba(self, X: pd.DataFrame) -> np.ndarray | None:
-        if hasattr(self.automl, "predict_proba"):
-            return self.automl.predict_proba(X)
-        return None
+        return getattr(self.automl, "predict_proba", lambda _: None)(X)
 
     def get_best_model(self) -> Any:
-        # Devuelve el estimador puro de LightGBM (o similar) para exportar
         return self.raw_estimator
 
     def get_best_params(self) -> dict[str, Any]:
