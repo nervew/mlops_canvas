@@ -27,6 +27,7 @@ warnings.simplefilter("ignore", ConvergenceWarning)
 os.environ["MPLBACKEND"] = "Agg"
 import matplotlib  # noqa: E402
 matplotlib.use("Agg")  # noqa: E402
+import matplotlib.pyplot as plt  # noqa: E402
 
 # -------------------------------------------------------------------------
 # 4) Imports de aplicación
@@ -73,7 +74,7 @@ for path in [MODELS_DIR, RAW_DIR, RAW_PARTITIONED_DIR, FE_DIR, FS_DIR, OUTPUT_DI
 # -------------------------------------------------------------------------
 def run() -> None:
     # [2/10] Ingesta
-    print("[2/10] Generando y guardando datos sintéticos...", flush=True)
+    print("[2/10] Generando y guardando datos...", flush=True)
     df = generate_synthetic_patient_data()
     df.to_parquet(RAW_DIR / "df_raw.parquet")
     print(f"[2/10] Ingesta completada: {len(df):,} filas\n", flush=True)
@@ -101,6 +102,30 @@ def run() -> None:
     te_df.to_parquet(RAW_PARTITIONED_DIR / "test_df.parquet")
     bk_df.to_parquet(RAW_PARTITIONED_DIR / "backtest_df.parquet")
     print("[4/10] Particiones guardadas en disco.\n", flush=True)
+        # [4.1/10] Cálculo de métricas de estabilidad (PSI, KS, Gini)
+    metrics = splitter.calculate_metrics()
+    metrics_path = LOG_DIR / "split_metrics.csv"
+    metrics.to_csv(metrics_path, index=True)
+    print(f"[4.1/10] Métricas guardadas en {metrics_path}:\n", metrics, "\n", flush=True)
+
+    # [4.2/10] Diagrama de la evolución de 'target' en los splits
+    # Asegurarse de que 'Semana' es datetime y está ordenado
+    for df_split in (tr_df, te_df, bk_df):
+        df_split["Semana"] = pd.to_datetime(df_split["Semana"])
+    plt.figure(figsize=(10, 6))
+    plt.plot(tr_df["Semana"], tr_df["target"], label="Train")
+    plt.plot(te_df["Semana"], te_df["target"], label="Test")
+    plt.plot(bk_df["Semana"], bk_df["target"], label="Backtest")
+    plt.xlabel("Semana")
+    plt.ylabel("Target")
+    plt.title("Evolución de la variable target por split")
+    plt.legend()
+    plt.tight_layout()
+    plot_path = OUTPUT_DIR / "target_splits.png"
+    plt.savefig(plot_path)
+    plt.close()
+    print(f"[4.2/10] Diagrama guardado en {plot_path}\n", flush=True)
+
 
     # [5/10] Feature Engineering
     print("[5/10] Ejecutando Feature Engineering...", flush=True)
@@ -172,10 +197,11 @@ def run() -> None:
         except Exception:           # clasificador sin predict o problema distinto
             mae_base = "n/a"
 
-    # Si sigue sin existir (ej. problema de clasificación), usamos 'n/a'
+    # sin existir (ej. problema de clasificación), usamos 'n/a'
     if mae_base is None:
         mae_base = "n/a"
     
+    #No utilizamos pca
     fr_run(
         transformer=transf_inicial,
         features=lista_feats,
