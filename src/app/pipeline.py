@@ -42,7 +42,8 @@ if not hasattr(np, "VisibleDeprecationWarning"):
     np.VisibleDeprecationWarning = VisibleDeprecationWarning
 
 
-from .d_database import generate_synthetic_patient_data
+#from .d_database import generate_synthetic_patient_data
+#from .m01_data_ingestion import ingest
 from .m02_eda_univariado import run as eda_univar
 from .m03_data_validation.application import service as validate_srv
 from .m04_data_split.infrastructure.robust_data_splitter import RobustDataSplitter
@@ -53,6 +54,9 @@ from .m08_feature_reduction.pipeline_reduction import run_feature_reduction as f
 from .search_model.run_model_selector import run_model_selector
 from .search_model.export import export_model_onnx
 from sklearn.metrics import mean_absolute_error
+
+
+
 
 # -------------------------------------------------------------------------
 # 5) Configuración de rutas
@@ -75,9 +79,12 @@ for path in [MODELS_DIR, RAW_DIR, RAW_PARTITIONED_DIR, FE_DIR, FS_DIR, OUTPUT_DI
 def run() -> None:
     # [2/10] Ingesta
     print("[2/10] Generando y guardando datos...", flush=True)
-    df = generate_synthetic_patient_data()
-    df.to_parquet(RAW_DIR / "df_raw.parquet")
-    print(f"[2/10] Ingesta completada: {len(df):,} filas\n", flush=True)
+    out_path = RAW_DIR / "df_raw.parquet"
+    df = pd.read_parquet(out_path)
+    #df = ingest()
+    #df = generate_synthetic_patient_data()
+    df.to_parquet(out_path, index=False)
+    print(f"[2/10] Ingesta completada: {len(df):,} filas guardadas en {out_path}\n", flush=True)
 
     # [3/10] EDA univariado + Validación
     print("[3/10] Ejecutando EDA univariado y validación...", flush=True)

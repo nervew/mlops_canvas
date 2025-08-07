@@ -1,10 +1,9 @@
+from __future__ import annotations
 import pandas as pd
-import sqlalchemy as sa
 from pyspark.sql import SparkSession
-from ..domain.ports import IDataSource
 
-class SparkAdapter(IDataSource):
-    def __init__(self, catalog: str = None) -> None:
+class SparkAdapter:
+    def __init__(self, catalog: str | None = None) -> None:
         self.catalog = catalog
         self.spark: SparkSession | None = None
 
@@ -16,36 +15,12 @@ class SparkAdapter(IDataSource):
     def run_query(self, sql: str) -> pd.DataFrame:
         return self.spark.sql(sql).toPandas()
 
-class PostgresAdapter(IDataSource):
-    def __init__(self, conn_str: str) -> None:
-        self.conn_str = conn_str
-
-    def connect(self) -> None:
-        self.engine = sa.create_engine(self.conn_str)
-
-    def run_query(self, sql: str) -> pd.DataFrame:
-        with self.engine.connect() as conn:
-            return pd.read_sql(sql, conn)
-
-class SqlServerAdapter(IDataSource):
-    def __init__(self, conn_str: str) -> None:
-        self.conn_str = conn_str
-
-    def connect(self) -> None:
-        self.engine = sa.create_engine(self.conn_str)
-
-    def run_query(self, sql: str) -> pd.DataFrame:
-        with self.engine.connect() as conn:
-            return pd.read_sql(sql, conn)
-
-class DatabricksAdapter(IDataSource):
+class DatabricksAdapter:
     def __init__(self, conn_str: str) -> None:
         self.conn_str = conn_str
         self.spark: SparkSession | None = None
 
     def connect(self) -> None:
-        # Asegúrate de tener el paquete JDBC de Databricks en tu sesión Spark
-        # Por ejemplo: spark.jars.packages = "com.databricks:databricks-jdbc:2.6.34"
         self.spark = (
             SparkSession.builder
             .config("spark.jars.packages", "com.databricks:databricks-jdbc:2.6.34")
@@ -63,3 +38,29 @@ class DatabricksAdapter(IDataSource):
         )
         return df.toPandas()
 
+# Stubs para RDBMS si sqlalchemy NO está instalado
+try:
+    import sqlalchemy as sa
+
+    class PostgresAdapter:
+        def __init__(self, conn_str: str) -> None:
+            self.conn_str = conn_str
+            self.engine: sa.Engine | None = None
+
+        def connect(self) -> None:
+            self.engine = sa.create_engine(self.conn_str)
+
+        def run_query(self, sql: str) -> pd.DataFrame:
+            with self.engine.connect() as conn:
+                return pd.read_sql(sql, conn)
+
+    class SqlServerAdapter(PostgresAdapter):
+        ...
+except ImportError:
+    class PostgresAdapter:
+        def __init__(self, *_: object, **__: object) -> None:
+            raise ModuleNotFoundError("sqlalchemy is required for PostgresAdapter")
+
+    class SqlServerAdapter:
+        def __init__(self, *_: object, **__: object) -> None:
+            raise ModuleNotFoundError("sqlalchemy is required for SqlServerAdapter")

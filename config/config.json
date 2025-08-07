@@ -6,3 +6,4 @@
   "output_folder": "mlops_canvas/data/raw",
   "output_file": "usuarios_unicos.parquet"
 }
+
