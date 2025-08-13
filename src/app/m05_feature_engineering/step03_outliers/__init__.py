@@ -1,3 +1,3 @@
-from .adapters.iqr_handler import IQRHandler
+from .adapters.iqr_handler import IQRClipper
 
-__all__ = ["IQRHandler"]
+__all__ = ["IQRClipper"]

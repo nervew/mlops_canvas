@@ -1,66 +1,35 @@
 from __future__ import annotations
 
-# -------------------------------------------------------------------------
-# 1) Instalador de dependencias
-# -------------------------------------------------------------------------
 import os
 import json
 import warnings
-import joblib
-import pandas as pd
 from pathlib import Path
+import pandas as pd
 
 print("[1/10] Instalando dependencias...", flush=True)
 from .m00_instalador import install_requirements
 install_requirements()
 print("[1/10] Dependencias instaladas.\n", flush=True)
 
-# -------------------------------------------------------------------------
-# 2) Configuración de warnings
-# -------------------------------------------------------------------------
 from sklearn.exceptions import ConvergenceWarning
 warnings.simplefilter("ignore", ConvergenceWarning)
 
-# -------------------------------------------------------------------------
-# 3) Backend de matplotlib
-# -------------------------------------------------------------------------
 os.environ["MPLBACKEND"] = "Agg"
-import matplotlib  # noqa: E402
-matplotlib.use("Agg")  # noqa: E402
-import matplotlib.pyplot as plt  # noqa: E402
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
-# -------------------------------------------------------------------------
-# 4) Imports de aplicación
-# -------------------------------------------------------------------------
 import numpy as np
-
-#numpy ya no trae VisibleDeprecationWarning, SE crea
-if not hasattr(np, "VisibleDeprecationWarning"):
-    class VisibleDeprecationWarning(Warning):
-        """Parche para supervisied.utils.automl_plots"""
-        pass
-    np.VisibleDeprecationWarning = VisibleDeprecationWarning
-
-
 #from .d_database import generate_synthetic_patient_data
-#from .m01_data_ingestion import ingest
 from .m02_eda_univariado import run as eda_univar
 from .m03_data_validation.application import service as validate_srv
 from .m04_data_split.infrastructure.robust_data_splitter import RobustDataSplitter
 from .m05_feature_engineering.pipeline_engineering import run_pipeline as fe_run
 from .m06__feature_selection import run_pipeline as fs_run
 from .m08_feature_reduction.pipeline_reduction import run_feature_reduction as fr_run
-
 from .search_model.run_model_selector import run_model_selector
 from .search_model.export import export_model_onnx
-from sklearn.metrics import mean_absolute_error
 
-
-
-
-# -------------------------------------------------------------------------
-# 5) Configuración de rutas
-# -------------------------------------------------------------------------
 PROJECT_ROOT        = Path(__file__).resolve().parent.parent.parent
 MODELS_DIR          = PROJECT_ROOT / "models"
 RAW_DIR             = PROJECT_ROOT / "data" / "raw" / "complete"
@@ -73,112 +42,82 @@ LOG_DIR             = PROJECT_ROOT / "logs"
 for path in [MODELS_DIR, RAW_DIR, RAW_PARTITIONED_DIR, FE_DIR, FS_DIR, OUTPUT_DIR, LOG_DIR]:
     path.mkdir(parents=True, exist_ok=True)
 
-# -------------------------------------------------------------------------
-# 6) Pipeline principal
-# -------------------------------------------------------------------------
 def run() -> None:
-    # [2/10] Ingesta
     print("[2/10] Generando y guardando datos...", flush=True)
+    #df = generate_synthetic_patient_data()
     out_path = RAW_DIR / "df_raw.parquet"
     df = pd.read_parquet(out_path)
-    #df = ingest()
-    #df = generate_synthetic_patient_data()
-    df.to_parquet(out_path, index=False)
+    #df.to_parquet(out_path, index=False)
     print(f"[2/10] Ingesta completada: {len(df):,} filas guardadas en {out_path}\n", flush=True)
 
-    # [3/10] EDA univariado + Validación
     print("[3/10] Ejecutando EDA univariado y validación...", flush=True)
     eda_univar(df)
     if not validate_srv.run(df, fit_profile=True).valido:
         raise ValueError("Validación fallida.")
     print("[3/10] Datos validados correctamente.\n", flush=True)
 
-    # [4/10] Particionado temporal
     print("[4/10] Particionando datos de forma temporal...", flush=True)
     splitter = RobustDataSplitter(
-        df,
-        split_method="time",
-        target_column="target",
-        time_column="Semana",
-        train_size=0.7,
-        test_size=0.2,
-        backtest_size=0.1,
+        df, split_method="time", target_column="target", time_column="Semana",
+        train_size=0.7, test_size=0.2, backtest_size=0.1,
     )
     tr_df, te_df, bk_df = splitter.split_data()
     tr_df.to_parquet(RAW_PARTITIONED_DIR / "train_df.parquet")
     te_df.to_parquet(RAW_PARTITIONED_DIR / "test_df.parquet")
     bk_df.to_parquet(RAW_PARTITIONED_DIR / "backtest_df.parquet")
     print("[4/10] Particiones guardadas en disco.\n", flush=True)
-        # [4.1/10] Cálculo de métricas de estabilidad (PSI, KS, Gini)
+
     metrics = splitter.calculate_metrics()
     metrics_path = LOG_DIR / "split_metrics.csv"
     metrics.to_csv(metrics_path, index=True)
     print(f"[4.1/10] Métricas guardadas en {metrics_path}:\n", metrics, "\n", flush=True)
 
-    # [4.2/10] Diagrama de la evolución de 'target' en los splits
-    # Asegurarse de que 'Semana' es datetime y está ordenado
     for df_split in (tr_df, te_df, bk_df):
         df_split["Semana"] = pd.to_datetime(df_split["Semana"])
     plt.figure(figsize=(10, 6))
     plt.plot(tr_df["Semana"], tr_df["target"], label="Train")
     plt.plot(te_df["Semana"], te_df["target"], label="Test")
     plt.plot(bk_df["Semana"], bk_df["target"], label="Backtest")
-    plt.xlabel("Semana")
-    plt.ylabel("Target")
-    plt.title("Evolución de la variable target por split")
-    plt.legend()
-    plt.tight_layout()
+    plt.xlabel("Semana"); plt.ylabel("Target"); plt.title("Evolución de la variable target por split")
+    plt.legend(); plt.tight_layout()
     plot_path = OUTPUT_DIR / "target_splits.png"
-    plt.savefig(plot_path)
-    plt.close()
+    plt.savefig(plot_path); plt.close()
     print(f"[4.2/10] Diagrama guardado en {plot_path}\n", flush=True)
 
-
-    # [5/10] Feature Engineering
     print("[5/10] Ejecutando Feature Engineering...", flush=True)
     fe_run()
     print("[5/10] Feature Engineering completado.\n", flush=True)
 
-    # [6/10] Feature Selection
     print("[6/10] Ejecutando Feature Selection (filter → frame)...", flush=True)
-    X_tr_fs, X_te_fs, X_bk_fs, logs = fs_run(
-        techniques=["filter", "frame"],
-        save_logs=True
-    )
+    X_tr_fs, X_te_fs, X_bk_fs, logs = fs_run(techniques=["filter", "frame"], save_logs=True)
     print(pd.DataFrame(logs), "\n", flush=True)
+
+    # ⟶ CAMBIO: exportamos lista_engineering.json
     lista_feats = [c for c in X_tr_fs.columns if c != "target"]
     lista_dir = OUTPUT_DIR / "Lista_feature_final"
     lista_dir.mkdir(parents=True, exist_ok=True)
-    with open(lista_dir / "lista_feature_final.json", "w") as fh:
+    with open(lista_dir / "lista_engineering.json", "w") as fh:
         json.dump(lista_feats, fh, indent=4)
-    print("[6/10] Lista de features exportada.\n", flush=True)
+    print("[6/10] Lista de ingeniería exportada: output/Lista_feature_final/lista_engineering.json\n", flush=True)
 
-    # [7/10] AutoML con FLAML
     print("[7/10] Ejecutando AutoML con FLAML...", flush=True)
     y_train = pd.read_parquet(FE_DIR / "X_train_processed.parquet").pop("target")
     y_test  = pd.read_parquet(FE_DIR / "X_test_processed.parquet").pop("target")
     automl = run_model_selector(
-        X_train=X_tr_fs,
-        y_train=y_train,
-        X_test=X_te_fs,
-        y_test=y_test,
-        framework="flaml",
-        task="regression",
-        time_budget=300,
-        metric="mae",
+        X_train=X_tr_fs, y_train=y_train, X_test=X_te_fs, y_test=y_test,
+        framework="flaml", task="regression", time_budget=300, metric="mae",
         log_file=str(LOG_DIR / "flaml.log"),
     )
     print("[7/10] AutoML finalizado. Ranking de los 5 mejores modelos:", flush=True)
     ranking = automl.get_model_ranking()
     print(ranking.head(5).to_string(index=False), "\n", flush=True)
 
-    # Evaluamos y mostramos métricas del mejor modelo
     automl.evaluate(X_te_fs, y_test)
     print("Mejor modelo:", automl.name, flush=True)
     print("Métricas del mejor modelo:", automl.metrics, "\n", flush=True)
 
-    # [8/10] Exportación a ONNX
     print("[8/10] Exportando modelo final a ONNX...", flush=True)
+    from .search_model.export import export_model_onnx
     export_model_onnx(
         model=automl.get_best_model(),
         X_sample=X_tr_fs,
@@ -187,43 +126,26 @@ def run() -> None:
     )
     print("[8/10] Modelo ONNX exportado.\n", flush=True)
 
-    # [9/10] Feature Reduction
     print("[9/10] Ejecutando Feature Reduction...", flush=True)
-    transf_inicial = joblib.load(PROJECT_ROOT / "transformers" / "transformador_inicial.joblib")
-    # ─── 1) intentar extraer MAE de metrics  ───
-    # ─── 1) Intentar extraer MAE (sólo si existe la clave) ───
-    mae_base: float | str | None = None
-    if isinstance(getattr(automl, "metrics", None), dict):
-        mae_base = automl.metrics.get("mae")      # puede ser None
-
-    # ─── 2) Si no hay MAE y es REGRESIÓN, lo calculamos  ───
-    if mae_base is None and getattr(automl, "task", "") == "regression":
-        try:
-            y_pred = automl.predict(X_te_fs)
-            mae_base = mean_absolute_error(y_test, y_pred)
-        except Exception:           # clasificador sin predict o problema distinto
-            mae_base = "n/a"
-
-    # sin existir (ej. problema de clasificación), usamos 'n/a'
-    if mae_base is None:
-        mae_base = "n/a"
-    
-    #No utilizamos pca
-    fr_run(
-        transformer=transf_inicial,
-        features=lista_feats,
-        params={"method": "pca", "n_components": 3},
-        use_reduction=False,
-        temporal_vars=["Semana"],
+    res = fr_run(
+        transformer_inicial_onnx_path="transformers/transformador_inicial.onnx",
+        modelo_onnx_path="models/modelo_v1.onnx",
+        feature_names_out_path="logs/feature_names_out.json",
+        lista_features_global_path="output/Lista_feature_final/lista_engineering.json",  # ⟶ CAMBIO
+        lista_features_m08_path="output/Lista_feature_final/lista_reduction.json",      # lectura previa si existiera
         target_var="target",
-        mae_anterior=mae_base,      # ahora puede ser float ó 'n/a'
+        verbose=True,
     )
-
+    # Mostrar en pantalla resultados de m08
+    print("[9/10] Resumen reducción:")
+    print(f"  • lista_engineering_path: {res.get('lista_engineering_path')}")
+    print(f"  • lista_reduction_path  : {res.get('lista_reduction_path')}")
+    print(f"  • n_selected            : {res.get('n_selected')}")
+    print(f"  • temporal_candidates   : {res.get('temporal_candidates')}")
+    print(f"  • reduction(head)       : {res.get('reduction_names_head')}\n")
     print("[9/10] Feature Reduction completado.\n", flush=True)
 
-    # [10/10] Fin
     print("[10/10] Pipeline completado exitosamente.", flush=True)
-
 
 if __name__ == "__main__":
     run()

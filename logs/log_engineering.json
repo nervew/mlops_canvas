@@ -1,0 +1,12 @@
+{
+    "time_cols": [
+        "Semana"
+    ],
+    "num_cols": [
+        "EPS_A",
+        "EPS_B",
+        "EPS_C",
+        "EPS_D"
+    ],
+    "cat_cols": []
+}

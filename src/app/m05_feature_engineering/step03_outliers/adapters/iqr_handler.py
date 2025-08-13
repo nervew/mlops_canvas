@@ -1,38 +1,44 @@
 from __future__ import annotations
+import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
-from ..ports.handler import IOutlierHandler
 
-
-class IQRHandler(IOutlierHandler, BaseEstimator, TransformerMixin):
-    """Capping de outliers con método IQR."""
-
+class IQRClipper(BaseEstimator, TransformerMixin):
+    """
+    Capping de outliers con IQR en columnas numéricas.
+    - Guarda feature_names_in_ para que ColumnTransformer pueda propagar nombres.
+    - Implementa get_feature_names_out -> devuelve los mismos nombres de entrada.
+    """
     def __init__(self, factor: float = 1.5) -> None:
-        self.factor = factor
-        self.bounds: dict[str, tuple[float, float]] = {}
-        self.numeric_cols: list[str] = []
+        self.factor = float(factor)
+        self.numeric_cols_: list[str] = []
+        self.bounds_: dict[str, tuple[float, float]] = {}
+        self.feature_names_in_: list[str] = []
 
-    def fit(self, df: pd.DataFrame, y=None) -> "IQRHandler":
-        self.numeric_cols = df.select_dtypes(include="number").columns.tolist()
-        self.bounds = {}
-        for col in self.numeric_cols:
-            q1, q3 = df[col].quantile([0.25, 0.75])
+    def fit(self, X: pd.DataFrame, y=None) -> "IQRClipper":
+        if not isinstance(X, pd.DataFrame):
+            X = pd.DataFrame(X)
+        self.feature_names_in_ = list(X.columns)
+
+        self.numeric_cols_ = list(X.select_dtypes(include=["number"]).columns)
+        self.bounds_ = {}
+        for col in self.numeric_cols_:
+            q1, q3 = pd.Series(X[col]).quantile([0.25, 0.75])
             iqr = q3 - q1
-            self.bounds[col] = (
-                q1 - self.factor * iqr,
-                q3 + self.factor * iqr,
-            )
-        self.fitted_ = True  # <-- atributo "_"
+            self.bounds_[col] = (float(q1 - self.factor * iqr),
+                                 float(q3 + self.factor * iqr))
         return self
 
-    def transform(self, df: pd.DataFrame) -> pd.DataFrame:
-        if not getattr(self, "fitted_", False):
-            raise RuntimeError("IQRHandler: llama primero a fit().")
-        df = df.copy()
-        for col, (low, up) in self.bounds.items():
-            if col in df.columns:
-                df[col] = df[col].clip(low, up)
-        return df
+    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
+        if not isinstance(X, pd.DataFrame):
+            X = pd.DataFrame(X, columns=self.feature_names_in_ or None)
+        X = X.copy()
+        for col, (low, up) in self.bounds_.items():
+            if col in X.columns:
+                X[col] = pd.Series(X[col]).clip(low, up)
+        return X
 
-    def fit_transform(self, df: pd.DataFrame, y=None) -> pd.DataFrame:
-        return self.fit(df, y).transform(df)
+    def get_feature_names_out(self, input_features=None):
+        if input_features is None:
+            input_features = self.feature_names_in_
+        return np.asarray(list(input_features), dtype=object)

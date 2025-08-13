@@ -1,38 +1,45 @@
-from typing import Any, Dict
+# m08_feature_reduction/step06_evaluation/adapters/evaluator.py
+from __future__ import annotations
+from typing import Callable, Dict
+import numpy as np
 import pandas as pd
-from sklearn.metrics import mean_squared_error
 
-from ..ports.evaluator import IEvaluator
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
-class Evaluator(IEvaluator):
+# En sklearn >= 1.4: usar root_mean_squared_error; en otras versiones, fallback.
+try:
+    from sklearn.metrics import root_mean_squared_error  # sklearn >= 1.4
+    _HAS_RMSE_FN = True
+except Exception:
+    root_mean_squared_error = None
+    _HAS_RMSE_FN = False
+
+
+class Evaluator:
     """
-    Evalúa bien:
-      - Si el objeto tiene .predict(), usa ese predict vs y_val.
-      - Si no, pero tiene 'reducer' en named_steps (un PCA), calcula
-        MSE de reconstrucción: ||X - inverse_transform(transform(X))||^2.
-      - Si no tiene predict ni reducer, retorna métricas vacías.
+    Evaluación SUPERVISADA:
+    - Recibe predict_fn(X_df_crudo) -> y_pred (1D).
+    - Calcula MAE, MSE, RMSE, R2 sin usar el parámetro 'squared'.
     """
-    def evaluate(
-        self,
-        model: Any,
-        X_val: pd.DataFrame,
-        y_val: pd.Series
-    ) -> Dict[str, float]:
-        # 1) Ruta estimador con predict()
-        if hasattr(model, "predict"):
-            preds = model.predict(X_val)
-            return {"mse": mean_squared_error(y_val, preds)}
+    def evaluate(self,
+                 predict_fn: Callable[[pd.DataFrame], np.ndarray],
+                 X_val: pd.DataFrame,
+                 y_val: pd.Series) -> Dict[str, float]:
+        if X_val is None or y_val is None or len(X_val) == 0 or len(y_val) == 0:
+            return {}
 
-        # 2) Ruta reducción: buscar PCA en el pipeline
-        if hasattr(model, "named_steps") and "reducer" in model.named_steps:
-            pca = model.named_steps["reducer"]
-            if not hasattr(pca, "inverse_transform"):
-                raise ValueError("El reductor no soporta inverse_transform para reconstrucción.")
-            X = X_val.values if hasattr(X_val, "values") else X_val
-            reduced = pca.transform(X)
-            recon = pca.inverse_transform(reduced)
-            mse = mean_squared_error(X, recon)
-            return {"reconstruction_mse": mse}
+        y_hat = np.asarray(predict_fn(X_val)).ravel()
+        y_true = np.asarray(y_val).ravel()
 
-        # 3) Sin predict ni reductor => ningun cálculo
-        return {}
+        mse = float(mean_squared_error(y_true, y_hat))
+        if _HAS_RMSE_FN:
+            rmse = float(root_mean_squared_error(y_true, y_hat))
+        else:
+            rmse = float(np.sqrt(mse))
+
+        return {
+            "mae": float(mean_absolute_error(y_true, y_hat)),
+            "mse": mse,
+            "rmse": rmse,
+            "r2": float(r2_score(y_true, y_hat)),
+        }

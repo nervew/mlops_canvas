@@ -107,7 +107,7 @@ def run_pipeline(
 
         print(f"✔ Logs guardados en {log_file}")
 
-    print("Pipeline finalizado. Variables seleccionadas finales:")
+    print("Pipeline finalizado. Variables númericas seleccionadas finales:")
     print(X_train.columns.tolist())
 
     return X_train, X_test, X_back, logs

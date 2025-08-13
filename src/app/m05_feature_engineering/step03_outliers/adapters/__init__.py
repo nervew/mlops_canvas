@@ -1,4 +1,4 @@
 # step03_outliers/adapters/__init__.py
-from .iqr_handler import IQRHandler
+from .iqr_handler import IQRClipper
 
-__all__ = ["IQRHandler"]
+__all__ = ["IQRClipper"]
