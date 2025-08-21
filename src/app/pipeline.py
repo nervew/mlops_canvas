@@ -29,6 +29,7 @@ from .m06__feature_selection import run_pipeline as fs_run
 from .m08_feature_reduction.pipeline_reduction import run_feature_reduction as fr_run
 from .search_model.run_model_selector import run_model_selector
 from .search_model.export import export_model_onnx
+from mlops.mlflow_helper import MLflowHelper
 
 PROJECT_ROOT        = Path(__file__).resolve().parent.parent.parent
 MODELS_DIR          = PROJECT_ROOT / "models"
@@ -71,6 +72,15 @@ def run() -> None:
     metrics_path = LOG_DIR / "split_metrics.csv"
     metrics.to_csv(metrics_path, index=True)
     print(f"[4.1/10] Métricas guardadas en {metrics_path}:\n", metrics, "\n", flush=True)
+
+    helper = MLflowHelper(
+        experiment_name=os.getenv("MLFLOW_EXPERIMENT", "Default"),
+        default_tags={"component": "data_split"},
+    )
+    helper.configure()
+    with helper.run(run_name="data_split", tags={"stage": "split"}):
+        helper.log_metrics({"train_rows": len(tr_df), "test_rows": len(te_df)})
+        helper.log_artifacts(str(metrics_path.parent), artifact_path="split")
 
     for df_split in (tr_df, te_df, bk_df):
         df_split["Semana"] = pd.to_datetime(df_split["Semana"])
