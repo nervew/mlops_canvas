@@ -1,0 +1,6 @@
+[tool.pytest.ini_options]
+addopts = "--cov=src/app/d_database --cov=src/app/m00_instalador --cov=src/app/m01_data_ingestion --cov=src/app/m02_eda_univariado --cov-report=term-missing --cov-fail-under=80"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+omit = ["*/__init__.py",]
