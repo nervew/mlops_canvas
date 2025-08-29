@@ -19,3 +19,4 @@ onnxruntime==1.18.0
 flaml
 lightgbm
 onnxmltools==1.13.0
+boto3
