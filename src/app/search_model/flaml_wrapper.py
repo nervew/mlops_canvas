@@ -1,13 +1,52 @@
 # search_model/flaml_wrapper.py
+from __future__ import annotations
+
 from typing import Any
-from pathlib import Path          
+from pathlib import Path
+import types
+import sys
+import importlib
 import numpy as np
 import pandas as pd
-from flaml import AutoML
 from sklearn.metrics import roc_auc_score, accuracy_score, mean_absolute_error
 
 from .automl_base import AutoMLBase
 from .export import get_log_path
+
+
+def _ensure_safe_mlflow_import() -> None:
+    """
+    Si existe un módulo 'mlflow' sin la API esperada (p.ej. sin active_run),
+    lo reemplaza por un stub para que FLAML no falle al intentar loguear.
+    Debe ejecutarse ANTES de importar FLAML.
+    """
+    try:
+        m = importlib.import_module("mlflow")
+        # Si no tiene active_run, lo consideramos inválido.
+        if not hasattr(m, "active_run"):
+            raise ImportError("mlflow sin 'active_run'")
+    except Exception:
+        dummy = types.ModuleType("mlflow")
+        # No-op helpers
+        def _none(*args, **kwargs): 
+            return None
+        def _ctx(*args, **kwargs):
+            class _C:
+                def __enter__(self): return self
+                def __exit__(self, exc_type, exc, tb): return False
+            return _C()
+        # API mínima que FLAML podría tocar
+        dummy.active_run = _none
+        dummy.start_run  = _ctx
+        dummy.log_metric = _none
+        dummy.log_param  = _none
+        dummy.set_tag    = _none
+        sys.modules["mlflow"] = dummy
+
+
+# Parchear antes del import de FLAML
+_ensure_safe_mlflow_import()
+from flaml import AutoML  # noqa: E402
 
 
 class FLAMLWrapper(AutoMLBase):

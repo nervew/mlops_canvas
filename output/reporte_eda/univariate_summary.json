@@ -1,0 +1,355 @@
+{
+  "univariate_stats": {
+    "Semana": {
+      "count": 342,
+      "missing": 0,
+      "missing_pct": 0.0,
+      "top": "2018-12-31T00:00:00",
+      "unique": 342,
+      "freq": 1
+    },
+    "target": {
+      "count": 342,
+      "missing": 0,
+      "missing_pct": 0.0,
+      "mean": 141293.40643274854,
+      "std": 78974.86750860354,
+      "min": 1.0,
+      "q1": 80732.75,
+      "median": 101038.5,
+      "q3": 216345.0,
+      "max": 416758.0,
+      "outliers_count": 0,
+      "outliers_pct": 0.0,
+      "hist_bins": [
+        1.0,
+        41676.7,
+        83352.4,
+        125028.09999999999,
+        166703.8,
+        208379.5,
+        250055.19999999998,
+        291730.89999999997,
+        333406.6,
+        375082.3,
+        416758.0
+      ],
+      "hist_counts": [
+        12,
+        88,
+        98,
+        14,
+        31,
+        75,
+        14,
+        4,
+        4,
+        2
+      ]
+    },
+    "usuarios_ccf": {
+      "count": 342,
+      "missing": 0,
+      "missing_pct": 0.0,
+      "mean": 1856.2397660818713,
+      "std": 1205.36960946542,
+      "min": 0.0,
+      "q1": 1052.75,
+      "median": 1409.0,
+      "q3": 2686.5,
+      "max": 6701.0,
+      "outliers_count": 6,
+      "outliers_pct": 1.7543859649122806,
+      "hist_bins": [
+        0.0,
+        670.1,
+        1340.2,
+        2010.3000000000002,
+        2680.4,
+        3350.5,
+        4020.6000000000004,
+        4690.7,
+        5360.8,
+        6030.900000000001,
+        6701.0
+      ],
+      "hist_counts": [
+        27,
+        139,
+        52,
+        37,
+        44,
+        29,
+        5,
+        4,
+        2,
+        3
+      ]
+    },
+    "usuarios_eas": {
+      "count": 342,
+      "missing": 0,
+      "missing_pct": 0.0,
+      "mean": 155.83333333333334,
+      "std": 176.6883159608112,
+      "min": 0.0,
+      "q1": 44.0,
+      "median": 66.0,
+      "q3": 294.5,
+      "max": 990.0,
+      "outliers_count": 7,
+      "outliers_pct": 2.046783625730994,
+      "hist_bins": [
+        0.0,
+        99.0,
+        198.0,
+        297.0,
+        396.0,
+        495.0,
+        594.0,
+        693.0,
+        792.0,
+        891.0,
+        990.0
+      ],
+      "hist_counts": [
+        208,
+        35,
+        14,
+        50,
+        25,
+        1,
+        2,
+        3,
+        1,
+        3
+      ]
+    },
+    "usuarios_eps": {
+      "count": 342,
+      "missing": 0,
+      "missing_pct": 0.0,
+      "mean": 122269.04970760235,
+      "std": 72028.20716168868,
+      "min": 1.0,
+      "q1": 65834.0,
+      "median": 84818.0,
+      "q3": 189647.5,
+      "max": 386876.0,
+      "outliers_count": 1,
+      "outliers_pct": 0.29239766081871343,
+      "hist_bins": [
+        1.0,
+        38688.5,
+        77376.0,
+        116063.5,
+        154751.0,
+        193438.5,
+        232126.0,
+        270813.5,
+        309501.0,
+        348188.5,
+        386876.0
+      ],
+      "hist_counts": [
+        12,
+        139,
+        45,
+        16,
+        57,
+        60,
+        4,
+        5,
+        3,
+        1
+      ]
+    },
+    "usuarios_ess": {
+      "count": 342,
+      "missing": 0,
+      "missing_pct": 0.0,
+      "mean": 17017.081871345028,
+      "std": 7711.800257226173,
+      "min": 0.0,
+      "q1": 13189.25,
+      "median": 15286.0,
+      "q3": 22440.0,
+      "max": 53109.0,
+      "outliers_count": 5,
+      "outliers_pct": 1.461988304093567,
+      "hist_bins": [
+        0.0,
+        5310.9,
+        10621.8,
+        15932.699999999999,
+        21243.6,
+        26554.5,
+        31865.399999999998,
+        37176.299999999996,
+        42487.2,
+        47798.1,
+        53109.0
+      ],
+      "hist_counts": [
+        23,
+        15,
+        155,
+        55,
+        51,
+        36,
+        2,
+        3,
+        1,
+        1
+      ]
+    }
+  },
+  "data_quality": {
+    "dataset": {
+      "total_rows": 342,
+      "total_columns": 6
+    },
+    "types": {
+      "numeric": [
+        "target",
+        "usuarios_ccf",
+        "usuarios_eas",
+        "usuarios_eps",
+        "usuarios_ess"
+      ],
+      "string": [],
+      "datetime": [
+        "Semana"
+      ],
+      "boolean": [],
+      "categorical": [],
+      "other": []
+    },
+    "columns": {
+      "Semana": {
+        "dtype": "datetime64[ns]",
+        "null_count": 0,
+        "null_pct": 0.0,
+        "distinct_count": 342,
+        "unique_pct": 100.0,
+        "duplicate_count": 0,
+        "duplicate_pct": 0.0
+      },
+      "target": {
+        "dtype": "int64",
+        "null_count": 0,
+        "null_pct": 0.0,
+        "distinct_count": 342,
+        "unique_pct": 100.0,
+        "duplicate_count": 0,
+        "duplicate_pct": 0.0
+      },
+      "usuarios_ccf": {
+        "dtype": "int64",
+        "null_count": 0,
+        "null_pct": 0.0,
+        "distinct_count": 310,
+        "unique_pct": 90.64,
+        "duplicate_count": 32,
+        "duplicate_pct": 9.36
+      },
+      "usuarios_eas": {
+        "dtype": "int64",
+        "null_count": 0,
+        "null_pct": 0.0,
+        "distinct_count": 184,
+        "unique_pct": 53.8,
+        "duplicate_count": 158,
+        "duplicate_pct": 46.2
+      },
+      "usuarios_eps": {
+        "dtype": "int64",
+        "null_count": 0,
+        "null_pct": 0.0,
+        "distinct_count": 342,
+        "unique_pct": 100.0,
+        "duplicate_count": 0,
+        "duplicate_pct": 0.0
+      },
+      "usuarios_ess": {
+        "dtype": "int64",
+        "null_count": 0,
+        "null_pct": 0.0,
+        "distinct_count": 333,
+        "unique_pct": 97.37,
+        "duplicate_count": 9,
+        "duplicate_pct": 2.63
+      }
+    },
+    "duplicates": {
+      "num_duplicate_rows": 0,
+      "num_duplicate_groups": 0,
+      "groups_sample": []
+    },
+    "describe_head": {
+      "index": [
+        "Semana",
+        "target",
+        "usuarios_ccf",
+        "usuarios_eas",
+        "usuarios_eps"
+      ],
+      "count": [
+        342,
+        342.0,
+        342.0,
+        342.0,
+        342.0
+      ],
+      "mean": [
+        "2022-04-07T12:00:00",
+        141293.40643274854,
+        1856.2397660818713,
+        155.83333333333334,
+        122269.04970760235
+      ],
+      "min": [
+        "2018-12-31T00:00:00",
+        1.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "25%": [
+        "2020-08-18T18:00:00",
+        80732.75,
+        1052.75,
+        44.0,
+        65834.0
+      ],
+      "50%": [
+        "2022-04-07T12:00:00",
+        101038.5,
+        1409.0,
+        66.0,
+        84818.0
+      ],
+      "75%": [
+        "2023-11-25T06:00:00",
+        216345.0,
+        2686.5,
+        294.5,
+        189647.5
+      ],
+      "max": [
+        "2025-07-14T00:00:00",
+        416758.0,
+        6701.0,
+        990.0,
+        386876.0
+      ],
+      "std": [
+        NaN,
+        78974.86750860354,
+        1205.36960946542,
+        176.6883159608112,
+        72028.20716168868
+      ]
+    }
+  }
+}

@@ -9,19 +9,19 @@
             "aprobado": true,
             "problemas": []
         },
-        "EPS_A": {
+        "usuarios_ccf": {
             "aprobado": true,
             "problemas": []
         },
-        "EPS_B": {
+        "usuarios_eas": {
             "aprobado": true,
             "problemas": []
         },
-        "EPS_C": {
+        "usuarios_eps": {
             "aprobado": true,
             "problemas": []
         },
-        "EPS_D": {
+        "usuarios_ess": {
             "aprobado": true,
             "problemas": []
         }
