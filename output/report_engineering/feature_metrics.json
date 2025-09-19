@@ -1,12 +1,13 @@
 {
     "n_rows": 239,
-    "n_cols": 6,
+    "n_cols": 7,
     "means": {
+        "usuarios_unicos": -0.1679648607969284,
         "usuarios_ccf": 0.12814661860466003,
         "usuarios_eas": 0.3382640480995178,
         "usuarios_eps": -0.19213704764842987,
         "usuarios_ess": 0.10419316589832306,
         "Semana": 18729.0,
-        "target": 165701.4518828452
+        "target": 144873.51046025104
     }
 }

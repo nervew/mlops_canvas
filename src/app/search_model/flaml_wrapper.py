@@ -1,167 +1,182 @@
+# -*- coding: utf-8 -*-
 # search_model/flaml_wrapper.py
 from __future__ import annotations
 
-from typing import Any
-from pathlib import Path
-import types
-import sys
-import importlib
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
+
 import numpy as np
 import pandas as pd
-from sklearn.metrics import roc_auc_score, accuracy_score, mean_absolute_error
 
-from .automl_base import AutoMLBase
-from .export import get_log_path
-
-
-def _ensure_safe_mlflow_import() -> None:
-    """
-    Si existe un módulo 'mlflow' sin la API esperada (p.ej. sin active_run),
-    lo reemplaza por un stub para que FLAML no falle al intentar loguear.
-    Debe ejecutarse ANTES de importar FLAML.
-    """
-    try:
-        m = importlib.import_module("mlflow")
-        # Si no tiene active_run, lo consideramos inválido.
-        if not hasattr(m, "active_run"):
-            raise ImportError("mlflow sin 'active_run'")
-    except Exception:
-        dummy = types.ModuleType("mlflow")
-        # No-op helpers
-        def _none(*args, **kwargs): 
-            return None
-        def _ctx(*args, **kwargs):
-            class _C:
-                def __enter__(self): return self
-                def __exit__(self, exc_type, exc, tb): return False
-            return _C()
-        # API mínima que FLAML podría tocar
-        dummy.active_run = _none
-        dummy.start_run  = _ctx
-        dummy.log_metric = _none
-        dummy.log_param  = _none
-        dummy.set_tag    = _none
-        sys.modules["mlflow"] = dummy
+# FLAML puro (sin mlflow)
+from flaml import AutoML
 
 
-# Parchear antes del import de FLAML
-_ensure_safe_mlflow_import()
-from flaml import AutoML  # noqa: E402
+def _metric_name(task: str, metric: Optional[str]) -> str:
+    """Normaliza el nombre de métrica aceptado por FLAML."""
+    if metric:
+        m = metric.lower()
+        if task == "regression":
+            # alias comunes
+            if m in {"mae", "l1"}:
+                return "mae"
+            if m in {"mse", "l2"}:
+                return "mse"
+            if m in {"rmse"}:
+                return "rmse"
+            if m in {"r2", "r2score", "r^2"}:
+                return "r2"
+            return m
+        else:
+            # clasificación
+            if m in {"logloss", "cross_entropy"}:
+                return "log_loss"
+            if m in {"auc", "roc_auc"}:
+                return "roc_auc"
+            if m in {"f1", "f1score"}:
+                return "f1"
+            if m in {"acc", "accuracy"}:
+                return "accuracy"
+            return m
+    # valores por defecto
+    return "mae" if task == "regression" else "log_loss"
 
 
-class FLAMLWrapper(AutoMLBase):
-    _NAME_MAP = {
-        "lgbm": "LightGBM",
-        "xgboost": "XGBoost",
-        "rf": "Random Forest",
-        "extra_tree": "Extra Trees",
-        "catboost": "CatBoost",
-        "linear": "Linear",
-    }
+@dataclass
+class AutoMLResult:
+    name: str
+    metrics: Dict[str, float]
+
+
+class FLAMLWrapper:
+    """Capa delgada sobre FLAML que **no** usa MLflow en ningún caso."""
 
     def __init__(
         self,
-        task: str = "auto",
-        time_budget: int = 60,
-        metric: str | None = None,
-        verbose: int = 0,
-        log_file: str | None = None,
-        preprocess: bool = False,
+        task: str = "regression",
+        metric: Optional[str] = None,
+        time_budget: int = 300,
+        estimator_list: Optional[List[str]] = None,
+        eval_method: str = "cv",
+        log_file: Optional[str] = None,  # FLAML escribe a archivo si se lo das; no a mlflow
+        verbose: int = 1,
     ) -> None:
-        super().__init__("FLAML")
         self.task = task
+        self.metric = _metric_name(task, metric)
         self.time_budget = time_budget
-        self.metric_override = metric
+        self.estimator_list = estimator_list or [
+            "lgbm", "rf", "catboost", "xgboost", "extra_tree", "xgb_limitdepth"
+        ]
+        self.eval_method = eval_method
+        self.log_file = log_file
         self.verbose = verbose
 
-        # Ruta de log absoluta y con directorio creado
-        self.log_file = (
-            get_log_path() if log_file is None
-            else get_log_path(Path(log_file).name)
-        )
-
-        self.preprocess = preprocess
         self.automl = AutoML()
-        self.raw_estimator: Any = None  # Para exportación ONNX
+        # Blindaje anti-logging externo: sobreescribimos el hook interno de FLAML
+        # responsable de loguear pruebas. No toca mlflow en absoluto.
+        # (método de instancia que FLAML llama durante la búsqueda)
+        try:
+            self.automl._log_trial = lambda *args, **kwargs: None  # type: ignore[attr-defined]
+        except Exception:
+            pass
 
-    # ------------------------------------------------------------------ #
-    # Métodos internos
-    # ------------------------------------------------------------------ #
-    def _infer_task(self, y: pd.Series) -> str:
-        if self.task != "auto":
-            return self.task
-        if y.dtype.kind in "biu" and y.nunique() <= 15:
-            return "classification"
-        return "regression"
+        self._result: Optional[AutoMLResult] = None
 
-    # ------------------------------------------------------------------ #
-    # API pública
-    # ------------------------------------------------------------------ #
+    # ---- API pública ----
     def fit(
         self,
         X_train: pd.DataFrame,
         y_train: pd.Series,
-        X_test: pd.DataFrame,
-        y_test: pd.Series,
-    ) -> None:
-        task = self._infer_task(y_train)
-        metric = (
-            self.metric_override
-            or ("roc_auc" if task == "classification" and y_train.nunique() == 2 else
-                "roc_auc_ovr" if task == "classification" else
-                "mae")
+        X_val: Optional[pd.DataFrame] = None,
+        y_val: Optional[pd.Series] = None,
+    ) -> "FLAMLWrapper":
+        fit_kwargs: Dict[str, Any] = dict(
+            task=self.task,
+            metric=self.metric,
+            time_budget=self.time_budget,
+            estimator_list=self.estimator_list,
+            eval_method=self.eval_method,
+            verbose=self.verbose,
         )
+        if self.log_file:
+            fit_kwargs["log_file"] = self.log_file
+        if X_val is not None and y_val is not None:
+            fit_kwargs["X_val"] = X_val
+            fit_kwargs["y_val"] = y_val
 
-        settings = {
-            "task": task,
-            "time_budget": self.time_budget,
-            "eval_method": "holdout",
-            "metric": metric,
-            "verbose": self.verbose,
-            "log_file_name": self.log_file,
-            "skip_transform": self.preprocess,
-            "model_history": True,
-        }
+        self.automl.fit(X_train=X_train, y_train=y_train, **fit_kwargs)
 
-        # Entrena FLAML
-        self.automl.fit(
-            X_train=X_train,
-            y_train=y_train,
-            X_val=X_test,
-            y_val=y_test,
-            **settings
-        )
+        # Nombre del mejor modelo
+        best_est = self.automl.best_estimator
+        self._result = AutoMLResult(name=str(best_est), metrics={})
+        return self
 
-        # Resultados
-        self.raw_estimator = self.automl.model.estimator
-        self.best_params = dict(self.automl.best_config)
+    def evaluate(self, X_test: pd.DataFrame, y_test: pd.Series) -> Dict[str, float]:
+        """Evalúa el mejor modelo con métricas básicas (regresión o clasificación)."""
+        if self.task == "regression":
+            y_pred = self.predict(X_test)
+            mae = float(np.mean(np.abs(y_test - y_pred)))
+            rmse = float(np.sqrt(np.mean((y_test - y_pred) ** 2)))
+            # r2 manual para no importar sklearn
+            y_bar = float(np.mean(y_test))
+            ss_res = float(np.sum((y_test - y_pred) ** 2))
+            ss_tot = float(np.sum((y_test - y_bar) ** 2)) or 1.0
+            r2 = 1.0 - ss_res / ss_tot
+            metrics = {"mae": mae, "rmse": rmse, "r2": r2}
+        else:
+            # clasificación: probas si existen, si no, predicción dura
+            if hasattr(self.automl, "predict_proba"):
+                proba = self.automl.predict_proba(X_test)
+                # log loss “suave” sin sklearn
+                eps = 1e-15
+                proba = np.clip(proba, eps, 1 - eps)
+                if proba.ndim == 1 or proba.shape[1] == 1:
+                    p1 = proba.ravel()
+                    yb = y_test.astype(int).to_numpy()
+                    logloss = float(-np.mean(yb * np.log(p1) + (1 - yb) * np.log(1 - p1)))
+                else:
+                    yb = y_test.astype(int).to_numpy()
+                    ll = -np.log(proba[np.arange(len(yb)), yb])
+                    logloss = float(np.mean(ll))
+                metrics = {"log_loss": logloss}
+            else:
+                y_pred = self.predict(X_test)
+                acc = float(np.mean(y_pred == y_test))
+                metrics = {"accuracy": acc}
 
-        # Ranking
-        records = []
-        for est, loss in self.automl.best_loss_per_estimator.items():
-            metric_value = (1 - loss) if task == "classification" else loss
-            records.append({
-                "estimator_name": self._NAME_MAP.get(est, est),
-                "metric": metric_value
-            })
-
-        self.model_ranking = (
-            pd.DataFrame(records)
-              .sort_values("metric", ascending=(task != "classification"))
-              .reset_index(drop=True)
-        )
+        if self._result:
+            self._result.metrics = metrics
+        return metrics
 
     def predict(self, X: pd.DataFrame) -> np.ndarray:
-        return self.automl.predict(X)
+        return np.asarray(self.automl.predict(X))
 
-    def predict_proba(self, X: pd.DataFrame) -> np.ndarray | None:
-        return getattr(self.automl, "predict_proba", lambda _: None)(X)
+    # ---- accesores usados por pipeline.py ----
+    @property
+    def name(self) -> str:
+        return self._result.name if self._result else str(self.automl.best_estimator)
 
-    def get_best_model(self) -> Any:
-        return self.raw_estimator
+    @property
+    def metrics(self) -> Dict[str, float]:
+        return self._result.metrics if self._result else {}
 
-    def get_best_params(self) -> dict[str, Any]:
-        return self.best_params
+    def get_best_model(self):
+        return self.automl.model
 
     def get_model_ranking(self) -> pd.DataFrame:
-        return self.model_ranking
+        """Devuelve ranking (DataFrame) de los mejores modelos de FLAML."""
+        # FLAML expone self.automl.best_config_per_estimator / best_result
+        rows: List[Dict[str, Any]] = []
+        try:
+            br = self.automl.best_result
+            rows.append(
+                {
+                    "estimator": self.automl.best_estimator,
+                    "metric_val": br.get("val_loss", np.nan),
+                    "train_time": br.get("train_time", np.nan),
+                    "config": br.get("config", {}),
+                }
+            )
+        except Exception:
+            pass
+        return pd.DataFrame(rows)

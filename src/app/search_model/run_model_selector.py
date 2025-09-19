@@ -1,43 +1,43 @@
+# -*- coding: utf-8 -*-
 # search_model/run_model_selector.py
 from __future__ import annotations
-from typing import Any
+
+from typing import Optional
+
+import pandas as pd
+
+from .flaml_wrapper import FLAMLWrapper
+
 
 def run_model_selector(
-    X_train,
-    y_train,
-    X_test=None,
-    y_test=None,
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    X_test: Optional[pd.DataFrame] = None,
+    y_test: Optional[pd.Series] = None,
     framework: str = "flaml",
-    **kwargs
-) -> Any:
+    task: str = "regression",
+    time_budget: int = 300,
+    metric: str = "mae",
+    log_file: Optional[str] = None,
+):
     """
-    Ejecuta el selector de modelos según el framework elegido.
-
-    Parámetros
-    ----------
-    framework : {"flaml", "mljar"}
-        - "flaml": usa FLAMLWrapper (requiere X_test e y_test para validación).
-        - "mljar": usa MLJARWrapper (no requiere X_test/y_test aquí).
-
-    kwargs : dict
-        Se pasan directamente al wrapper correspondiente.
+    Orquesta la búsqueda de modelo usando FLAML (sin mlflow).
+    Devuelve el wrapper con el modelo ya entrenado.
     """
-    fw = (framework or "flaml").lower()
+    if framework.lower() != "flaml":
+        raise ValueError("Por ahora solo se soporta framework='flaml'.")
 
-    if fw == "flaml":
-        # Import perezoso para evitar dependencias innecesarias en tiempo de carga
-        from .flaml_wrapper import FLAMLWrapper
-        if X_test is None or y_test is None:
-            raise ValueError("FLAML requiere X_test e y_test para la validación holdout.")
-        automl = FLAMLWrapper(**kwargs)
-        automl.fit(X_train, y_train, X_test, y_test)
-        return automl
+    automl = FLAMLWrapper(
+        task=task,
+        metric=metric,
+        time_budget=time_budget,
+        log_file=log_file,
+        verbose=1,
+    )
 
-    if fw == "mljar":
-        # Solo importamos MLJAR si realmente se solicita (evita errores de scipy/statsmodels)
-        from .mljar_wrapper import MLJARWrapper
-        automl = MLJARWrapper()
+    if X_test is not None and y_test is not None:
+        automl.fit(X_train, y_train, X_val=X_test, y_val=y_test)
+    else:
         automl.fit(X_train, y_train)
-        return automl
 
-    raise ValueError(f"Framework '{framework}' no soportado. Usa 'flaml' o 'mljar'.")
+    return automl

@@ -10,7 +10,7 @@
         "max_date": "2025-07-14 00:00:00",
         "has_duplicates": false
     },
-    "target": {
+    "usuarios_unicos": {
         "dtype": "int64",
         "null_ratio": 0.0,
         "non_null_ratio": 1.0,
@@ -104,5 +104,24 @@
         "is_monotonic_increasing": false,
         "is_monotonic_decreasing": false,
         "has_duplicates": true
+    },
+    "target": {
+        "dtype": "int64",
+        "null_ratio": 0.0,
+        "non_null_ratio": 1.0,
+        "unique_count": 342,
+        "unique_ratio": 1.0,
+        "is_constant": false,
+        "min": 1,
+        "max": 386876,
+        "mean": 122269.04970760235,
+        "median": 84818.0,
+        "std": 72028.20716168868,
+        "outlier_ratio": 0.0029239766081871343,
+        "iqr_lower_bound": -119886.25,
+        "iqr_upper_bound": 375367.75,
+        "is_monotonic_increasing": false,
+        "is_monotonic_decreasing": false,
+        "has_duplicates": false
     }
 }
