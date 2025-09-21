@@ -1,13 +1,23 @@
 {
-    "n_rows": 239,
-    "n_cols": 7,
+    "n_rows": 129,
+    "n_cols": 17,
     "means": {
-        "usuarios_unicos": -0.1679648607969284,
-        "usuarios_ccf": 0.12814661860466003,
-        "usuarios_eas": 0.3382640480995178,
-        "usuarios_eps": -0.19213704764842987,
-        "usuarios_ess": 0.10419316589832306,
-        "Semana": 18729.0,
-        "target": 144873.51046025104
+        "total_suministros_t4": 0.1075326750712595,
+        "total_pacientes_unicos_t4": 0.10190268480227567,
+        "share_tipo_medicamento_t4": -0.07077901371659419,
+        "share_tipo_procedimiento_t4": 0.20486145548779408,
+        "share_tipo_dispositivo_t4": 0.2224559487879822,
+        "share_tipo_nutricional_t4": -0.18949331470990544,
+        "share_tipo_servicio_comp_t4": 0.12374576143394599,
+        "share_regimen_contributivo_t4": 0.10009456626976665,
+        "share_regimen_subsidiado_t4": -0.10009396787109749,
+        "share_regimen_otro_t4": 0.0,
+        "hhi_et_t4": 0.12326877884820242,
+        "u_nuevos_pref_eps_t4": 0.030523255813953494,
+        "u_nuevos_pref_eas_t4": 0.051679586563307504,
+        "u_nuevos_pref_ess_t4": -0.06954595791805095,
+        "u_nuevos_pref_ccf_t4": 0.20976375046142495,
+        "semana": 19443.0,
+        "target": 7440.054263565891
     }
 }

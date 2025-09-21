@@ -1,31 +1,71 @@
 {
     "valido": true,
     "detalles": {
-        "Semana": {
-            "aprobado": true,
-            "problemas": []
-        },
-        "usuarios_unicos": {
-            "aprobado": true,
-            "problemas": []
-        },
-        "usuarios_ccf": {
-            "aprobado": true,
-            "problemas": []
-        },
-        "usuarios_eas": {
-            "aprobado": true,
-            "problemas": []
-        },
-        "usuarios_eps": {
-            "aprobado": true,
-            "problemas": []
-        },
-        "usuarios_ess": {
+        "semana": {
             "aprobado": true,
             "problemas": []
         },
         "target": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "total_suministros_t4": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "total_pacientes_unicos_t4": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "share_tipo_medicamento_t4": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "share_tipo_procedimiento_t4": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "share_tipo_dispositivo_t4": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "share_tipo_nutricional_t4": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "share_tipo_servicio_comp_t4": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "share_regimen_contributivo_t4": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "share_regimen_subsidiado_t4": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "share_regimen_otro_t4": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "hhi_et_t4": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "u_nuevos_pref_eps_t4": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "u_nuevos_pref_eas_t4": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "u_nuevos_pref_ess_t4": {
+            "aprobado": true,
+            "problemas": []
+        },
+        "u_nuevos_pref_ccf_t4": {
             "aprobado": true,
             "problemas": []
         }

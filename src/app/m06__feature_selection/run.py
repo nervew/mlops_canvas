@@ -21,9 +21,9 @@ from .step07_export     import export_partitions
 
 def run_pipeline(
     techniques: List[str] = ["filter", "frame", "abess", "shap", "permutation"],
-    forward_k: int = 3,
-    final_k:   int = 2,
-    top_n:     int = 3,
+    forward_k: int = 4,
+    final_k:   int = 4,
+    top_n:     int = 4,
     tol:       float = 0.01,
     save_logs: bool  = False,
 ) -> tuple[

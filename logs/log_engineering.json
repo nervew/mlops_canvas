@@ -1,13 +1,23 @@
 {
     "time_cols": [
-        "Semana"
+        "semana"
     ],
     "num_cols": [
-        "usuarios_unicos",
-        "usuarios_ccf",
-        "usuarios_eas",
-        "usuarios_eps",
-        "usuarios_ess"
+        "total_suministros_t4",
+        "total_pacientes_unicos_t4",
+        "share_tipo_medicamento_t4",
+        "share_tipo_procedimiento_t4",
+        "share_tipo_dispositivo_t4",
+        "share_tipo_nutricional_t4",
+        "share_tipo_servicio_comp_t4",
+        "share_regimen_contributivo_t4",
+        "share_regimen_subsidiado_t4",
+        "share_regimen_otro_t4",
+        "hhi_et_t4",
+        "u_nuevos_pref_eps_t4",
+        "u_nuevos_pref_eas_t4",
+        "u_nuevos_pref_ess_t4",
+        "u_nuevos_pref_ccf_t4"
     ],
     "cat_cols": []
 }

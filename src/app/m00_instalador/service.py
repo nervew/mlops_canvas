@@ -1,148 +1,134 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-import os
-import sys
+import hashlib
 import subprocess
+import sys
 from pathlib import Path
-from typing import Iterable
+from typing import List, Tuple
 
-PY_VER = f"python{sys.version_info.major}.{sys.version_info.minor}"
 
-# --- PINS compatibles con sklearn 1.4.x y onnxruntime 1.18.x ---
-PINS_SCI = [
-    "numpy==1.26.4",
-    "scipy==1.11.4",
-    "pandas==2.2.3",
-    "matplotlib==3.8.4",
-    "pyarrow==21.0.0",
-    "joblib==1.5.2",
-    "threadpoolctl==3.6.0",
-    "scikit-learn==1.4.2",
-]
+# Raíz del repo: .../mlops_canvas
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+REQ_FILE     = PROJECT_ROOT / "requirements.txt"
+LOGS_DIR     = PROJECT_ROOT / "logs"
+CACHE_FILE   = LOGS_DIR / "requirements.sha1"
 
-PINS_ONNX = [
-    "numpy==1.26.4",
-    "scipy==1.11.4",
-    "scikit-learn==1.4.2",
-    "pybind11==3.0.1",
-    "onnx==1.16.0",
-    "onnxruntime==1.18.1",
-    "onnxmltools==1.13.0",
-    "onnxconverter-common==1.16.0",
-    "skl2onnx==1.19.1",
-    "protobuf==6.32.1",
-    "flatbuffers==25.2.10",
-    "coloredlogs==15.0.1",
-    "humanfriendly==10.0",
-    "sympy==1.14.0",
-    "packaging==25.0",
-]
-
-PINS_RESTO = [
-    "numpy==1.26.4",
-    "scipy==1.11.4",
-    "scikit-learn==1.4.2",
-    "xgboost==1.7.6",
-    "lightgbm==4.6.0",
-    "catboost==1.2.8",
-    "flaml[automl]==2.1.2",
-    "mljar-supervised==1.0.2",
-    "scikit-plot==0.3.7",
-    "dtreeviz==2.2.2",
-    "shap==0.48.0",
-    "category-encoders==2.6.3",
-    "seaborn==0.13.2",
-    "wordcloud==1.9.4",
-    "optuna==3.6.1",
-    "pyspark==4.0.1",
-    "py4j==0.10.9.9",
-    "SQLAlchemy==2.0.43",
-    "sweetviz==2.3.1",
-    "openml==0.15.1",
-    "minio==7.2.16",
-    "xmltodict==1.0.2",
-    "liac-arff==2.5.0",
-    "graphviz==0.21",
-    "colour==0.1.5",
-    "jinja2==3.1.5",
-    "tqdm==4.67.1",
+# Paquetes “sentinela” para verificar que el entorno quedó usable
+# (no hacemos import profundo que pueda romper por ABI; solo import base)
+SENTINELS: List[Tuple[str, str]] = [
+    ("numpy", "np.__version__"),
+    ("pandas", "pd.__version__"),
+    ("sklearn", "sklearn.__version__"),
+    ("xgboost", "xgboost.__version__"),
+    ("lightgbm", "lightgbm.__version__"),
+    ("onnx", "onnx.__version__"),
+    ("onnxruntime", "ort.get_available_providers()"),  # import onnxruntime as ort
+    ("pyarrow", "pa.__version__"),
+    ("sweetviz", "sv.__version__"),
 ]
 
 
-def _our_site_packages() -> Path:
-    """Ruta site-packages donde pip instala para el intérprete de cluster_libraries."""
-    exe = Path(sys.executable)
-    # .../python/bin/python -> .../python/lib/pythonX.Y/site-packages
-    return exe.parent.parent / "lib" / PY_VER / "site-packages"
+def _hash_file(p: Path) -> str:
+    h = hashlib.sha1()
+    with p.open("rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
-def _pip(args: Iterable[str]) -> None:
-    cmd = [
-        sys.executable, "-m", "pip", "install", "--upgrade",
-        "--no-cache-dir", "--disable-pip-version-check", "--force-reinstall", *args
-    ]
-    print(f"[m00] Ejecutando: {' '.join(cmd)}", flush=True)
+def _read_cached_hash() -> str | None:
+    if CACHE_FILE.exists():
+        try:
+            return CACHE_FILE.read_text(encoding="utf-8").strip()
+        except Exception:
+            return None
+    return None
+
+
+def _write_cached_hash(h: str) -> None:
+    LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    CACHE_FILE.write_text(h, encoding="utf-8")
+
+
+def _imports_ok() -> bool:
+    """
+    Intenta importar un conjunto de librerías clave. No imprime nada.
+    Devuelve True si todos importan sin excepción.
+    """
+    try:
+        import importlib  # noqa: F401
+
+        import numpy as np  # noqa: F401
+        import pandas as pd  # noqa: F401
+        import sklearn  # noqa: F401
+        import xgboost  # noqa: F401
+        import lightgbm  # noqa: F401
+        import onnx  # noqa: F401
+        import onnxruntime as ort  # noqa: F401
+        import pyarrow as pa  # noqa: F401
+        import sweetviz as sv  # noqa: F401
+
+        # Accesos ligeros (evitan fallos silenciosos de ABI)
+        _ = np.__version__
+        _ = pd.__version__
+        _ = sklearn.__version__
+        _ = xgboost.__version__
+        _ = lightgbm.__version__
+        _ = onnx.__version__
+        _ = ort.get_available_providers()
+        _ = pa.__version__
+        _ = sv.__version__
+        return True
+    except Exception:
+        return False
+
+
+def _pip_install(requirements: Path, force_reinstall: bool = False) -> None:
+    """
+    Ejecuta `pip install -r requirements.txt` sin '--user'.
+    """
+    cmd = [sys.executable, "-m", "pip", "install", "-r", str(requirements)]
+    if force_reinstall:
+        cmd.insert(4, "--force-reinstall")  # después de 'install'
+    # Passthrough de salida de pip:
     subprocess.run(cmd, check=True)
 
 
-def _prepend_our_site_packages() -> None:
+def install_requirements(force_reinstall: bool = False) -> None:
     """
-    Pone nuestra ruta al inicio de sys.path para que gane precedencia sobre
-    /databricks/python/... (donde suele vivir NumPy 2.x en DBR 17.x).
+    Orquesta la instalación con caché:
+      1) Si no hay requirements.txt → error claro.
+      2) Si hash no cambió y los imports funcionan → no instala.
+      3) Si cambió o falla un import → instala (sin '--user').
+      4) Verifica imports; si fallan, lanza error.
     """
-    sp = str(_our_site_packages())
-    if sp not in sys.path:
-        sys.path.insert(0, sp)
-    os.environ.setdefault("PYTHONNOUSERSITE", "1")  # evita user-site del driver
+    print("\nMÓDULO m00 • Instalación de dependencias")
+    print("[0.1] Instalando/verificando dependencias…")
 
+    if not REQ_FILE.exists():
+        raise FileNotFoundError(f"No se encontró {REQ_FILE}")
 
-def _ensure_numpy_1x() -> None:
-    """
-    Si NumPy ya fue importado, lo recarga desde nuestra ruta y valida 1.26.x.
-    Debe llamarse ANTES de importar pandas/sklearn/matplotlib en el pipeline.
-    """
-    import importlib
-    if "numpy" in sys.modules:
-        del sys.modules["numpy"]
-    importlib.invalidate_caches()
-    _prepend_our_site_packages()
-    import numpy as _np  # noqa: F401
-    print(f"[m00] NumPy activo: {_np.__version__}", flush=True)
-    if not _np.__version__.startswith("1.26"):
-        raise RuntimeError(
-            "Se está usando un NumPy distinto a 1.26.x. Revisa el orden de imports "
-            "y la precedencia de sys.path (nuestra site-packages debe ir primero)."
-        )
+    print(f"[0.2] requirements: {REQ_FILE.name}")
 
+    current_hash = _hash_file(REQ_FILE)
+    cached_hash  = _read_cached_hash()
 
-def install_requirements(requirements_path: str | None = None) -> None:
-    """
-    Instala paquetes "pinneados" y garantiza que la sesión importe NumPy 1.26.x.
-    Si pasas `requirements_path`, también instala ese requirements.txt al final.
-    """
-    print("[m00] Instalando núcleo científico + scikit-learn (pins)…", flush=True)
-    _pip(PINS_SCI)
+    need_install = force_reinstall or (current_hash != cached_hash) or (not _imports_ok())
 
-    print("\n[m00] Instalando stack ONNX (reafirma pins)…", flush=True)
-    _pip(PINS_ONNX)
+    if not need_install:
+        print("[0.3] Dependencias ya instaladas (caché vigente).")
+        return
 
-    print("\n[m00] Instalando resto de dependencias (mljar/s-plot)…", flush=True)
-    _pip(PINS_RESTO)
-
-    if requirements_path:
-        req = Path(requirements_path)
-        if req.exists():
-            print(f"\n[m00] Instalando extras de {req}…", flush=True)
-            _pip(["-r", str(req)])
-
-    # Priorizar nuestra site-packages y fijar NumPy 1.26.x activo
-    _prepend_our_site_packages()
-    _ensure_numpy_1x()
-
-    # Señales útiles
+    print("[0.3] Instalando paquetes de requirements.txt…")
     try:
-        import onnxruntime as ort  # noqa
-        print(f"[m00] onnxruntime OK: {ort.__version__}", flush=True)
-    except Exception as e:
-        print(f"[m00] Advertencia: onnxruntime no se pudo importar: {e}", flush=True)
+        _pip_install(REQ_FILE, force_reinstall=force_reinstall)
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"Fallo ejecutando pip (código {e.returncode}).") from e
+
+    # Verificación post-instalación
+    if not _imports_ok():
+        raise RuntimeError("Instalación completó pero no se pudieron importar paquetes sentinela.")
+
+    _write_cached_hash(current_hash)
+    print("[0.4] Instalación completada y caché actualizado ✅")

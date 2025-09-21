@@ -8,7 +8,6 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import pandas as pd
 
-# FLAML puro (sin mlflow)
 from flaml import AutoML
 
 
@@ -17,7 +16,6 @@ def _metric_name(task: str, metric: Optional[str]) -> str:
     if metric:
         m = metric.lower()
         if task == "regression":
-            # alias comunes
             if m in {"mae", "l1"}:
                 return "mae"
             if m in {"mse", "l2"}:
@@ -28,7 +26,6 @@ def _metric_name(task: str, metric: Optional[str]) -> str:
                 return "r2"
             return m
         else:
-            # clasificación
             if m in {"logloss", "cross_entropy"}:
                 return "log_loss"
             if m in {"auc", "roc_auc"}:
@@ -38,7 +35,6 @@ def _metric_name(task: str, metric: Optional[str]) -> str:
             if m in {"acc", "accuracy"}:
                 return "accuracy"
             return m
-    # valores por defecto
     return "mae" if task == "regression" else "log_loss"
 
 
@@ -57,8 +53,8 @@ class FLAMLWrapper:
         metric: Optional[str] = None,
         time_budget: int = 300,
         estimator_list: Optional[List[str]] = None,
-        eval_method: str = "cv",
-        log_file: Optional[str] = None,  # FLAML escribe a archivo si se lo das; no a mlflow
+        eval_method: str = "cv",              # por defecto CV si NO hay X_val/y_val
+        log_file: Optional[str] = None,       # ruta de log de FLAML (archivo)
         verbose: int = 1,
     ) -> None:
         self.task = task
@@ -72,9 +68,7 @@ class FLAMLWrapper:
         self.verbose = verbose
 
         self.automl = AutoML()
-        # Blindaje anti-logging externo: sobreescribimos el hook interno de FLAML
-        # responsable de loguear pruebas. No toca mlflow en absoluto.
-        # (método de instancia que FLAML llama durante la búsqueda)
+        # Evitar logs de pruebas intermedias
         try:
             self.automl._log_trial = lambda *args, **kwargs: None  # type: ignore[attr-defined]
         except Exception:
@@ -90,6 +84,7 @@ class FLAMLWrapper:
         X_val: Optional[pd.DataFrame] = None,
         y_val: Optional[pd.Series] = None,
     ) -> "FLAMLWrapper":
+        # Base de argumentos
         fit_kwargs: Dict[str, Any] = dict(
             task=self.task,
             metric=self.metric,
@@ -98,15 +93,18 @@ class FLAMLWrapper:
             eval_method=self.eval_method,
             verbose=self.verbose,
         )
+        # FLAML usa 'log_file_name' (no 'log_file')
         if self.log_file:
-            fit_kwargs["log_file"] = self.log_file
+            fit_kwargs["log_file_name"] = self.log_file
+
+        # Si traen validación explícita → FLAML exige 'holdout'
         if X_val is not None and y_val is not None:
             fit_kwargs["X_val"] = X_val
             fit_kwargs["y_val"] = y_val
+            fit_kwargs["eval_method"] = "holdout"
 
         self.automl.fit(X_train=X_train, y_train=y_train, **fit_kwargs)
 
-        # Nombre del mejor modelo
         best_est = self.automl.best_estimator
         self._result = AutoMLResult(name=str(best_est), metrics={})
         return self
@@ -117,17 +115,13 @@ class FLAMLWrapper:
             y_pred = self.predict(X_test)
             mae = float(np.mean(np.abs(y_test - y_pred)))
             rmse = float(np.sqrt(np.mean((y_test - y_pred) ** 2)))
-            # r2 manual para no importar sklearn
             y_bar = float(np.mean(y_test))
             ss_res = float(np.sum((y_test - y_pred) ** 2))
             ss_tot = float(np.sum((y_test - y_bar) ** 2)) or 1.0
-            r2 = 1.0 - ss_res / ss_tot
-            metrics = {"mae": mae, "rmse": rmse, "r2": r2}
+            metrics = {"mae": mae, "rmse": rmse, "r2": 1.0 - ss_res / ss_tot}
         else:
-            # clasificación: probas si existen, si no, predicción dura
             if hasattr(self.automl, "predict_proba"):
                 proba = self.automl.predict_proba(X_test)
-                # log loss “suave” sin sklearn
                 eps = 1e-15
                 proba = np.clip(proba, eps, 1 - eps)
                 if proba.ndim == 1 or proba.shape[1] == 1:
@@ -165,7 +159,6 @@ class FLAMLWrapper:
 
     def get_model_ranking(self) -> pd.DataFrame:
         """Devuelve ranking (DataFrame) de los mejores modelos de FLAML."""
-        # FLAML expone self.automl.best_config_per_estimator / best_result
         rows: List[Dict[str, Any]] = []
         try:
             br = self.automl.best_result

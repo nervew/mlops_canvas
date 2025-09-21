@@ -15,7 +15,6 @@ catboost==1.2.8
 flaml[automl]==2.1.2
 mljar-supervised==1.0.2
 scikit-plot==0.3.7     # explícito (lo arrastra mljar-supervised), sin mantenimiento desde 2018 :contentReference[oaicite:4]{index=4}
-scikit-plot==0.3.7
 dtreeviz==2.2.2
 shap==0.48.0
 category-encoders==2.6.3
