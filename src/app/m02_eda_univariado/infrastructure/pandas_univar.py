@@ -1,3 +1,4 @@
+# src/app/m02_eda_univariado/infrastructure/pandas_univar.py
 from pathlib import Path
 from typing import Union, Dict, Any, List
 
@@ -8,28 +9,32 @@ import sweetviz as sv
 from pandas.api.types import is_numeric_dtype, is_bool_dtype
 from datetime import datetime, date, time
 
-
-# ---------- Estadísticas univariadas (robusto a tipos) ----------
+# ---------- Estadísticas univariadas (robusto a tipos y duplicados) ----------
 def run_univariate_analysis(df: pd.DataFrame) -> dict:
     """
     Calcula estadísticas básicas por columna, incluyendo outliers e histograma
-    para columnas numéricas. Maneja booleanos aparte para evitar errores
-    de cuantiles sobre bool.
+    para columnas numéricas. Es **robusto** cuando hay nombres de columna
+    duplicados o MultiIndex porque toma cada columna por **posición**.
     """
     report: dict = {}
 
-    for col in df.columns:
+    n_cols = df.shape[1]
+    for idx in range(n_cols):
+        col_name = str(df.columns[idx])  # etiqueta (posible duplicada)
+        s_full = df.iloc[:, idx]         # SIEMPRE una Series
+        s = s_full.dropna()
+
         stats: dict = {}
-        s = df[col].dropna()
+        # Conteos robustos a tipos/duplicados
+        missing_count = int(pd.isna(s_full).sum())
+        stats["count"]       = int(len(s_full) - missing_count)
+        stats["missing"]     = missing_count
+        stats["missing_pct"] = float((missing_count / len(s_full)) * 100) if len(s_full) else 0.0
 
-        stats["count"]       = int(len(s))
-        stats["missing"]     = int(df[col].isna().sum())
-        stats["missing_pct"] = float((stats["missing"] / len(df)) * 100) if len(df) else 0.0
-
-        # --- Booleanos: tratarlos como categóricos binarios (evita cuantiles) ---
-        if is_bool_dtype(df[col]):
-            true_count  = int((s == True).sum())   # noqa: E712
-            false_count = int((s == False).sum())  # noqa: E712
+        # --- Booleanos (evitar cuantiles en bool) ---
+        if is_bool_dtype(s_full):
+            true_count  = int((s_full == True).sum())   # noqa: E712
+            false_count = int((s_full == False).sum())  # noqa: E712
             total       = true_count + false_count
             stats.update({
                 "dtype": "bool",
@@ -42,7 +47,7 @@ def run_univariate_analysis(df: pd.DataFrame) -> dict:
             })
 
         # --- Numéricos reales (excluye bool) ---
-        elif is_numeric_dtype(df[col]):
+        elif is_numeric_dtype(s_full):
             stats.update({
                 "mean":     float(s.mean()) if len(s) else None,
                 "std":      float(s.std()) if len(s) else None,
@@ -77,25 +82,21 @@ def run_univariate_analysis(df: pd.DataFrame) -> dict:
             freq = s.value_counts(dropna=True)
             stats["freq"]   = int(freq.iloc[0]) if not freq.empty else 0
 
-        report[col] = stats
+        report[col_name] = stats
 
     return report
 
-
-# ---------- Resumen de calidad de datos (estilo data quality) ----------
+# ---------- Resumen de calidad de datos (igual que antes) ----------
 def summarize_data_quality(df: pd.DataFrame, max_duplicate_groups: int = 0) -> Dict[str, Any]:
-    """
-    Métricas globales de calidad: nulos, distintos/duplicados, tipificación,
-    y un head de describe() compatible con múltiples versiones de pandas.
-    """
     n_rows, n_cols = df.shape
     types_map: Dict[str, List[str]] = {
         "numeric": [], "string": [], "datetime": [], "boolean": [], "categorical": [], "other": []
     }
     per_col: Dict[str, Any] = {}
 
-    for col in df.columns:
-        s = df[col]
+    for idx in range(n_cols):
+        col = str(df.columns[idx])
+        s = df.iloc[:, idx]
         if pd.api.types.is_numeric_dtype(s):
             col_type = "numeric"
         elif pd.api.types.is_datetime64_any_dtype(s):
@@ -138,7 +139,7 @@ def summarize_data_quality(df: pd.DataFrame, max_duplicate_groups: int = 0) -> D
 
         per_col[col] = entry
 
-    # Duplicados a nivel de fila (todas las columnas)
+    # Duplicados a nivel de fila
     num_duplicate_rows = int(df.duplicated(keep=False).sum())
     duplicate_groups_preview = []
     num_duplicate_groups = 0
@@ -154,7 +155,7 @@ def summarize_data_quality(df: pd.DataFrame, max_duplicate_groups: int = 0) -> D
                 "count": int(cnt)
             })
 
-    # --- describe() compatible con pandas 1.1–1.5 y 2.x ---
+    # describe() compatible
     try:
         desc = df.describe(include="all", datetime_is_numeric=True)
     except TypeError:
@@ -178,41 +179,30 @@ def summarize_data_quality(df: pd.DataFrame, max_duplicate_groups: int = 0) -> D
         "describe_head": describe_head,
     }
 
-
-# ---------- utilidades de serialización ----------
+# ---------- utilidades de serialización (sin cambios) ----------
 def write_json(payload: Dict[str, Any], output_path: Union[str, Path]) -> None:
-    """Guarda el dict en JSON (UTF-8) creando carpetas si no existen."""
     p = Path(output_path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    safe_payload = json_safe(payload)  # convierte todo a tipos serializables
+    safe_payload = json_safe(payload)
     with p.open("w", encoding="utf-8") as f:
         json.dump(safe_payload, f, ensure_ascii=False, indent=2)
 
-
 def json_safe(o: Any) -> Any:
-    """
-    Conversión recursiva a tipos JSON-serializables.
-    """
     if o is None or isinstance(o, (str, int, float, bool)):
         return o
-
     if isinstance(o, (np.integer, np.floating, np.bool_)):
         return o.item()
-
     if isinstance(o, pd.Timestamp):
         if pd.isna(o):
             return None
         return o.isoformat()
-
     if isinstance(o, (datetime, date, time)):
         return o.isoformat()
-
     if isinstance(o, np.datetime64):
         try:
             return np.datetime_as_string(o, unit="us")
         except Exception:
             return str(o)
-
     if isinstance(o, pd.Timedelta):
         return o.isoformat() if hasattr(o, "isoformat") else str(o)
     if isinstance(o, pd.Period):
@@ -222,24 +212,18 @@ def json_safe(o: Any) -> Any:
             return str(o)
     if isinstance(o, pd.Interval):
         return str(o)
-
     if isinstance(o, np.ndarray):
         return [json_safe(x) for x in o.tolist()]
-
     if isinstance(o, (list, tuple, set)):
         return [json_safe(x) for x in o]
     if isinstance(o, dict):
         return {str(json_safe(k)): json_safe(v) for k, v in o.items()}
-
     if isinstance(o, np.generic):
         return o.item()
-
     return str(o)
-
 
 def _to_builtin(x: Any) -> Any:
     return json_safe(x)
-
 
 def _round2(x: float) -> float:
     try:
@@ -247,18 +231,11 @@ def _round2(x: float) -> float:
     except Exception:
         return x
 
-
 # ---------- Sweetviz ----------
 def generate_sweetviz_report(df: pd.DataFrame, output_path: Union[str, Path]) -> None:
-    """
-    Genera un reporte Sweetviz y lo guarda en `output_path`.
-    Monkey-patch para evitar VisibleDeprecationWarning en ciertos entornos.
-    """
     if not hasattr(np, "VisibleDeprecationWarning"):
         np.VisibleDeprecationWarning = Warning
-
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-
     report = sv.analyze(df)
     report.show_html(str(output_path), open_browser=False)

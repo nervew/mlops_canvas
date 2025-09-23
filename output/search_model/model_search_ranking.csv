@@ -1,0 +1,2 @@
+estimator,metric_val,train_time,config
+xgb_limitdepth,131.28703588062663,,"{'n_estimators': 96, 'max_depth': 4, 'min_child_weight': 0.49731182671943286, 'learning_rate': 0.21248872587188378, 'subsample': 0.8104859811897382, 'colsample_bylevel': 1.0, 'colsample_bytree': 0.4428367289435217, 'reg_alpha': 0.4726926025723583, 'reg_lambda': 0.017822220013112563}"

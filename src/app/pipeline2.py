@@ -1,357 +1,400 @@
 # src/app/pipeline2.py
 from __future__ import annotations
 
-import sys, json
+import json
+import os
+import random
 from pathlib import Path
+from typing import List, Optional, Tuple
 
-# ───────────── Rutas del proyecto (solo stdlib aquí) ─────────────
-APP_DIR       = Path(__file__).resolve().parent          # .../src/app
-SRC_DIR       = APP_DIR.parent                           # .../src
-PROJECT_ROOT  = SRC_DIR.parent                           # .../mlops_canvas
+import pandas as pd
 
-DATA_PATH         = PROJECT_ROOT / "data" / "raw" / "complete" / "df.parquet"
-PARTITIONED_DIR   = PROJECT_ROOT / "data" / "raw" / "partitioned"
-VALIDATION_DIR    = PROJECT_ROOT / "output" / "validation"
-FE_DIR            = PROJECT_ROOT / "data" / "processed" / "pipeline_engineering"
-FS_DIR            = PROJECT_ROOT / "data" / "processed" / "pipeline_selection"
-LOGS_DIR          = PROJECT_ROOT / "logs"
-OUTPUT_DIR        = PROJECT_ROOT / "output"
-MODELS_DIR        = PROJECT_ROOT / "models"
-SEARCH_OUT_DIR    = OUTPUT_DIR / "search_model"
-
-# Config clave
-TIME_COLUMN  = "semana"                     # variable temporal para split m04 / gráficos
+# ─────────────────────────── Configuración adaptable ───────────────────────────
+TIME_COLUMN  = "semana"                     # nombre “estándar” temporal
 TARGET_ALIAS = "target"                     # alias estándar de target
-OLD_TARGET   = "y_usuarios_nuevos_semana"   # si existe, se renombra a 'target'
+OLD_TARGET   = "y_usuarios_nuevos_semana"   # nombre antiguo en datasets reales
 
-# sys.path para imports app.*
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
+# Semilla para FIJAR la generación de datos sintéticos
+DATA_SEED = 8729
 
-# ───────────── Utilidades de impresión ─────────────
+# ────────────────────────────── Rutas de proyecto ──────────────────────────────
+# …/mlops_canvas/src/app/pipeline2.py → parents[2] = …/mlops_canvas
+PROJECT_ROOT        = Path(__file__).resolve().parents[2]
+MODELS_DIR          = PROJECT_ROOT / "models"
+RAW_DIR             = PROJECT_ROOT / "data" / "raw" / "complete"
+RAW_PARTITIONED_DIR = PROJECT_ROOT / "data" / "raw" / "partitioned"
+FE_DIR              = PROJECT_ROOT / "data" / "processed" / "pipeline_engineering"
+FS_DIR              = PROJECT_ROOT / "data" / "processed" / "pipeline_selection"
+OUTPUT_DIR          = PROJECT_ROOT / "output"
+LOG_DIR             = PROJECT_ROOT / "logs"
+
+for p in [MODELS_DIR, RAW_DIR, RAW_PARTITIONED_DIR, FE_DIR, FS_DIR, OUTPUT_DIR, LOG_DIR]:
+    p.mkdir(parents=True, exist_ok=True)
+
+# ────────────────────────────── Utilidades de log ─────────────────────────────
 def banner(t: str) -> None:
-    line = "═" * len(t)
-    print(f"\n{line}\n{t}\n{line}")
+    print("\n" + "=" * 78)
+    print(t)
+    print("=" * 78 + "\n", flush=True)
 
-def step(i: str, t: str) -> None:
-    print(f"[{i}] {t}")
+def step(n: str, msg: str) -> None:
+    print(f"[{n}] {msg}", flush=True)
 
-def _print_preview_with_time_target(df, step_id: str, title: str,
-                                    time_col: str = TIME_COLUMN, target_col: str = TARGET_ALIAS,
-                                    extra_cols: int = 6) -> None:
-    cols = []
-    if time_col in df.columns:   cols.append(time_col)
-    if target_col in df.columns: cols.append(target_col)
-    others = [c for c in df.columns if c not in cols]
-    show_cols = cols + others[:max(0, extra_cols - len(cols))]
-    step(step_id, title)
+# ─────────────────────── Reproducibilidad de datos (SEED) ─────────────────────
+def _seed_everything(seed: int) -> None:
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    random.seed(seed)
     try:
-        print(df[show_cols].head(5).to_string())
-    except Exception:
-        print(df.head(5).to_string())
-
-def _print_selected_joining_time_target(X_sel, fe_dir: Path,
-                                        step_id: str, title: str) -> None:
-    try:
-        import pandas as pd
-        xproc_path = fe_dir / "X_train_processed.parquet"
-        if not xproc_path.exists():
-            step(step_id, f"{title} (no se encontró {xproc_path.name})")
-            print(X_sel.head(5).to_string()); return
-        X_proc = pd.read_parquet(xproc_path)
-        cols_add = [c for c in (TIME_COLUMN, TARGET_ALIAS) if c in X_proc.columns]
-        if not cols_add:
-            step(step_id, f"{title} (sin 'semana'/'target' en procesado)")
-            print(X_sel.head(5).to_string()); return
-        try:
-            add_part = X_proc.loc[X_sel.index, cols_add]
-        except Exception:
-            add_part = X_proc[cols_add].iloc[: len(X_sel)].copy()
-            add_part.index = X_sel.index[: len(add_part)]
-        preview = add_part.join(X_sel, how="left")
-        step(step_id, title); print(preview.head(5).to_string())
-    except Exception as e:
-        step(step_id, f"{title} (no se pudo reconstruir semana/target: {e})")
-        print(X_sel.head(5).to_string())
-
-# Conversión robusta de 'semana' a datetime (para filtros/plots)
-def _to_datetime_semana(s):
-    import numpy as _np
-    import pandas as _pd
-    if s is None:
-        return None
-    # Datasets con '17924' etc. = días desde 1970-01-01
-    if _np.issubdtype(s.dtype, _np.number) and s.min() > 1000 and s.max() < 100000:
-        return _pd.to_datetime(s.astype("int64"), unit="D", origin="1970-01-01")
-    return _pd.to_datetime(s, errors="coerce")
-
-# ───────────── Pipeline2 ─────────────
-def main() -> None:
-    banner("PIPELINE2 • m00 → m01 → m02 → m03 → m04 → m05 → m06 → m07")
-
-    # ===== m00: Instalación (0.x) =====
-    banner("MÓDULO m00 • Instalación de dependencias")
-    step("0.1", "Instalando/verificando dependencias…")
-    from app.m00_instalador import install_requirements
-    install_requirements()
-    step("0.2", "Dependencias listas ✅")
-
-    # A partir de aquí ya podemos importar paquetes y módulos que requieren dependencias
-    import numpy as np
-    import pandas as pd
-    # Backend headless para gráficos
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-
-    from app.m02_eda_univariado import run as m02_run
-    from app.m03_data_validation.application import service as validate_srv
-    from app.m04_data_split.infrastructure.robust_data_splitter import RobustDataSplitter
-    from app.m05_feature_engineering.pipeline_engineering import run_pipeline as fe_run
-    from app.m06__feature_selection import run_pipeline as fs_run
-    from app.search_model.run_model_selector import run_model_selector
-    from app.search_model.export import export_model_onnx, get_log_path
-
-    # ===== m01: Ingesta (1.x) =====
-    banner("MÓDULO m01 • Ingesta (importación del dataset)")
-    step("1.1", f"Leyendo parquet: {DATA_PATH.relative_to(PROJECT_ROOT)}")
-    if not DATA_PATH.exists():
-        raise FileNotFoundError(f"No se encontró el parquet en {DATA_PATH}")
-    df = pd.read_parquet(DATA_PATH)
-    step("1.2", f"Shape del DataFrame (antes de filtrar): {df.shape[0]} filas × {df.shape[1]} columnas")
-
-    if OLD_TARGET in df.columns and TARGET_ALIAS not in df.columns:
-        df = df.rename(columns={OLD_TARGET: TARGET_ALIAS})
-        step("1.3", f"Columna renombrada: '{OLD_TARGET}' → '{TARGET_ALIAS}' ✅")
-    elif TARGET_ALIAS in df.columns:
-        step("1.3", "La columna 'target' ya existe; no se renombra.")
-    else:
-        step("1.3", f"No se encontró la columna '{OLD_TARGET}'; no se renombra.")
-
-    # --- Corte post-pandemia: quedarnos con datos >= 2022-01-01 ---
-    if TIME_COLUMN in df.columns:
-        dt_sem = _to_datetime_semana(df[TIME_COLUMN])
-        mask = dt_sem >= pd.Timestamp("2022-01-01")
-        prev_n = len(df)
-        df = df.loc[mask].copy()
-        step("1.4", f"Filtro post-pandemia aplicado (desde 2022-01-01): {prev_n:,} → {len(df):,} filas")
-    else:
-        step("1.4", f"Aviso: no existe la columna temporal '{TIME_COLUMN}'. No se aplicó filtro por fecha.")
-
-    if TARGET_ALIAS in df.columns:
-        print("\n[1.5] Vista rápida de 'target' (después del filtro):")
-        try:
-            print(" - 5 valores:", df[TARGET_ALIAS].head().tolist())
-            print(" - Estadísticos básicos:"); print(df[TARGET_ALIAS].describe().to_string())
-        except Exception:
-            print(" (no se pudo describir 'target')")
-    else:
-        print("\n[1.5] No hay 'target' para mostrar.")
-
-    # ===== m02: EDA (2.x) =====
-    banner("MÓDULO m02 • Análisis Univariado (EDA)")
-    step("2.1", "Ejecutando EDA univariado…")
-    m02_run(df, print_tables=False, print_formal_summary=True, log_artifacts=True)
-    step("2.2", "EDA completado. Artefactos en output/reporte_eda/")
-
-    # ===== m03: Validación (3.x) =====
-    banner("MÓDULO m03 • Validación de datos")
-    step("3.1", "Creando/cargando perfil y validando contra el perfil…")
-    result = validate_srv.run(df, fit_profile=True)
-    step("3.2", f"Artefactos en: {VALIDATION_DIR.relative_to(PROJECT_ROOT)}")
-    print("       - data_profile.json"); print("       - validation_report.json")
-    if hasattr(result, "valido"):
-        print(f"       → Resultado global: {'✅ VÁLIDO' if result.valido else '❌ NO VÁLIDO'}")
-
-    # ===== m04: Split temporal (4.x) =====
-    banner("MÓDULO m04 • Particionado temporal por 'semana'")
-    step("4.1", f"Preparando carpeta de salida: {PARTITIONED_DIR.relative_to(PROJECT_ROOT)}")
-    PARTITIONED_DIR.mkdir(parents=True, exist_ok=True); LOGS_DIR.mkdir(parents=True, exist_ok=True)
-    if TIME_COLUMN not in df.columns:
-        raise KeyError(f"No se encontró la columna temporal '{TIME_COLUMN}' en el DataFrame.")
-    step("4.2", "Ejecutando RobustDataSplitter (split_method='time')…")
-    splitter = RobustDataSplitter(
-        df, split_method="time",
-        target_column=TARGET_ALIAS if TARGET_ALIAS in df.columns else None,
-        time_column=TIME_COLUMN, train_size=0.7, test_size=0.2, backtest_size=0.1,
-    )
-    train_df, test_df, backtest_df = splitter.split_data()
-    (PARTITIONED_DIR / "train_df.parquet").parent.mkdir(parents=True, exist_ok=True)
-    train_df.to_parquet(PARTITIONED_DIR / "train_df.parquet")
-    test_df.to_parquet(PARTITIONED_DIR / "test_df.parquet")
-    backtest_df.to_parquet(PARTITIONED_DIR / "backtest_df.parquet")
-    step("4.3", "Particiones guardadas:")
-    print("       -", (PARTITIONED_DIR / "train_df.parquet").relative_to(PROJECT_ROOT))
-    print("       -", (PARTITIONED_DIR / "test_df.parquet").relative_to(PROJECT_ROOT))
-    print("       -", (PARTITIONED_DIR / "backtest_df.parquet").relative_to(PROJECT_ROOT))
-    try:
-        metrics = splitter.calculate_metrics()
-        mp = LOGS_DIR / "split_metrics.csv"; metrics.to_csv(mp, index=True)
-        step("4.4", f"Métricas del split guardadas en: {mp.relative_to(PROJECT_ROOT)}")
-    except Exception:
-        step("4.4", "El splitter no expuso métricas (se continúa).")
-
-    # ===== m05: Feature Engineering (5.x) =====
-    banner("MÓDULO m05 • Feature Engineering")
-    step("5.1", "Ejecutando pipeline de ingeniería de variables…"); fe_run()
-    step("5.2", f"Artefactos esperados en: {FE_DIR.relative_to(PROJECT_ROOT)}")
-    print("       - X_train_processed.parquet")
-    print("       - X_test_processed.parquet")
-    print("       - X_backtest_processed.parquet")
-    print("       - Transformador inicial ONNX:",
-          "/Workspace/Users/jorgee.lopez@adres.gov.co/mlops_canvas/transformers/transformador_inicial.onnx")
-    try:
-        xtrain_proc = pd.read_parquet(FE_DIR / "X_train_processed.parquet")
-        _print_preview_with_time_target(xtrain_proc, "5.3", "Preview X_train_processed (head 5 con 'semana' y 'target'):")
-    except Exception as e:
-        step("5.3", f"No se pudo leer X_train_processed.parquet ({e}).")
-
-    # ===== m06: Feature Selection (6.x) =====
-    banner("MÓDULO m06 • Feature Selection (filter → frame)")
-    step("6.1", "Ejecutando selección de variables…")
-    X_tr_fs, X_te_fs, X_bk_fs, logs = fs_run(techniques=["filter", "frame"], save_logs=True)
-    try:
-        import pandas as _pd; print(_pd.DataFrame(logs), "\n")
+        import numpy as np
+        np.random.seed(seed)
     except Exception:
         pass
-    step("6.2", f"Artefactos esperados en: {FS_DIR.relative_to(PROJECT_ROOT)}")
-    print("       - X_train_selected.parquet")
-    print("       - X_test_selected.parquet")
-    print("       - X_backtest_selected.parquet")
-    _print_selected_joining_time_target(X_tr_fs, FE_DIR, "6.3", "Preview X_train_selected (head 5 con 'semana' y 'target'):")
 
-    # ===== m07: Search Model (FLAML) + Predicción ONNX =====
+# ─────────────────────────── Instalación (m00) ────────────────────────────────
+banner("PIPELINE2 · m00 → m01 → m02 → m03 → m04 → m05 → m06 → m07")
+banner("MÓDULO m00 • Instalación de dependencias")
+from .m00_instalador.service import install_requirements
+install_requirements("requirements.txt")
+print("m00 ✓ Dependencias listas\n", flush=True)
+
+# A partir de aquí podemos importar con seguridad
+os.environ["MPLBACKEND"] = "Agg"
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+
+from .m02_eda_univariado import run as m02_run
+from .m03_data_validation.application import service as validate_srv
+from .m04_data_split.infrastructure.robust_data_splitter import RobustDataSplitter
+from .m05_feature_engineering.pipeline_engineering import run_pipeline as fe_run
+from .m06__feature_selection import run_pipeline as fs_run
+
+from .search_model.run_model_selector import run_model_selector
+from .search_model.export import export_model_onnx
+
+# ─────────────────────────── Helpers de ingesta (m01) ─────────────────────────
+def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
+    cols_lower = {c.lower(): c for c in df.columns}
+    if OLD_TARGET.lower() in cols_lower:
+        old_real = cols_lower[OLD_TARGET.lower()]
+        if TARGET_ALIAS not in df.columns:
+            df = df.rename(columns={old_real: TARGET_ALIAS})
+        elif old_real != TARGET_ALIAS:
+            df = df.drop(columns=[old_real], errors="ignore")
+    if TIME_COLUMN.lower() in cols_lower:
+        real_time = cols_lower[TIME_COLUMN.lower()]
+        if real_time != TIME_COLUMN:
+            df = df.rename(columns={real_time: TIME_COLUMN})
+    if TIME_COLUMN in df.columns:
+        df[TIME_COLUMN] = pd.to_datetime(df[TIME_COLUMN], errors="coerce")
+    df = df.loc[:, ~pd.Index(df.columns).duplicated()].copy()
+    return df
+
+def _load_dataset() -> pd.DataFrame:
+    from .d_database import generate_synthetic_patient_data
+    step("1.0", f"Fijando semilla de datos: DATA_SEED={DATA_SEED}")
+    _seed_everything(DATA_SEED)
+
+    step("1.1", "Generando datos sintéticos (d_database.generate_synthetic_patient_data)…")
+    df = generate_synthetic_patient_data()
+
+    step("1.2", f"Columna temporal detectada: '{TIME_COLUMN}' → datetime OK")
+    df = _normalize_columns(df)
+
+    # Forzar target ENTERO (nuevos usuarios)
+    if TARGET_ALIAS in df.columns:
+        df[TARGET_ALIAS] = (
+            pd.to_numeric(df[TARGET_ALIAS], errors="coerce")
+              .fillna(0).round().astype(int)
+        )
+
+    step("1.3", f"Dataset leído con shape: {len(df)} filas × {df.shape[1]} columnas")
+    print(df.head(3).to_string(index=False))
+    return df
+
+# ──────────────────────── Predicción robusta (evita mismatch) ─────────────────
+def _ensure_same_columns(model, X: pd.DataFrame) -> pd.DataFrame:
+    names = getattr(model, "feature_names_in_", None)
+    if names is not None:
+        missing = [c for c in names if c not in X.columns]
+        for c in missing:
+            X[c] = 0.0
+        X = X.loc[:, list(names)]
+    return X
+
+# ──────────────────────── ONNX: exportación (solo modelo ganador) ─────────────
+def _export_onnx_selected_only(sk_model, X_sample: pd.DataFrame, out_dir: Path, version: str = "v1") -> Path:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    model_path = out_dir / f"modelo_{version}.onnx"
+    try:
+        export_model_onnx(sk_model, X_sample, out_dir, version=version)
+        if model_path.exists():
+            return model_path
+    except Exception as e:
+        print(f"  [onnx] Helper export_model_onnx falló: {e}")
+    try:
+        import xgboost as xgb  # noqa
+        from onnxmltools.convert import convert_xgboost
+        from skl2onnx.common.data_types import FloatTensorType
+        onx = convert_xgboost(sk_model, initial_types=[("input", FloatTensorType([None, X_sample.shape[1]]))])
+        with open(model_path, "wb") as f:
+            f.write(onx.SerializeToString())
+        print("  ✓ ONNX exportado con onnxmltools.convert_xgboost")
+        return model_path
+    except Exception:
+        pass
+    try:
+        import lightgbm as lgb  # noqa
+        from onnxmltools.convert import convert_lightgbm
+        from skl2onnx.common.data_types import FloatTensorType
+        onx = convert_lightgbm(sk_model, initial_types=[("input", FloatTensorType([None, X_sample.shape[1]]))])
+        with open(model_path, "wb") as f:
+            f.write(onx.SerializeToString())
+        print("  ✓ ONNX exportado con onnxmltools.convert_lightgbm")
+        return model_path
+    except Exception:
+        pass
+    try:
+        from catboost import CatBoostRegressor
+        if isinstance(sk_model, CatBoostRegressor):
+            sk_model.save_model(str(model_path), format="onnx")
+            print("  ✓ ONNX exportado con CatBoost.save_model(format='onnx')")
+            return model_path
+    except Exception:
+        pass
+    try:
+        from skl2onnx import convert_sklearn
+        from skl2onnx.common.data_types import FloatTensorType
+        for opset in (17, 16, 15, 14):
+            try:
+                onx = convert_sklearn(
+                    sk_model,
+                    initial_types=[("input", FloatTensorType([None, X_sample.shape[1]]))],
+                    target_opset=opset,
+                )
+                with open(model_path, "wb") as f:
+                    f.write(onx.SerializeToString())
+                print(f"  ✓ ONNX exportado con skl2onnx (opset={opset})")
+                return model_path
+            except Exception as e2:
+                print(f"  [onnx] skl2onnx (opset={opset}) falló: {e2}")
+    except Exception as e:
+        print(f"  [onnx] skl2onnx no disponible/compatible: {e}")
+    raise RuntimeError("No fue posible convertir el modelo seleccionado a ONNX.")
+
+# ─────────────────────────────── m07: ONNX + Plot ─────────────────────────────
+def _save_features_used(features: List[str]) -> Path:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    f = LOG_DIR / "model_features_used.json"
+    with open(f, "w", encoding="utf-8") as fh:
+        json.dump({"expected_n": len(features), "columns": features}, fh, indent=2)
+    return f
+
+def _plot_real_vs_pred(
+    time_test: pd.Series, y_test: pd.Series, y_pred_test,
+    time_back: pd.Series, y_back: pd.Series, y_pred_back,
+    out_path: Path,
+) -> None:
+    """
+    Versión robusta: usa Series con índice datetime y ordena por fecha.
+    Evita líneas horizontales si matplotlib/pandas colapsan arrays sin índice.
+    """
+    # Asegurar tipo datetime
+    t_test = pd.to_datetime(time_test)
+    t_back = pd.to_datetime(time_back)
+
+    # Series indexadas por fecha
+    real_t  = pd.Series(pd.to_numeric(y_test, errors="coerce").values, index=t_test)
+    real_b  = pd.Series(pd.to_numeric(y_back, errors="coerce").values, index=t_back)
+    pred_t  = pd.Series(pd.to_numeric(pd.Series(y_pred_test), errors="coerce").values, index=t_test)
+    pred_b  = pd.Series(pd.to_numeric(pd.Series(y_pred_back), errors="coerce").values, index=t_back)
+
+    # Orden cronológico
+    real_all = pd.concat([real_t, real_b]).sort_index()
+    pred_t = pred_t.sort_index()
+    pred_b = pred_b.sort_index()
+
+    plt.figure(figsize=(14, 6))
+    plt.plot(real_all.index, real_all.values, marker="o", linestyle="-", label="Real (Test + Backtest)")
+    plt.plot(pred_t.index,  pred_t.values,  marker="x", linestyle="--", label="Pronóstico (Test)")
+    plt.plot(pred_b.index,  pred_b.values,  marker="x", linestyle="--", label="Pronóstico (Backtest)")
+    plt.xlabel("Fecha"); plt.ylabel(TARGET_ALIAS)
+    plt.title("Reales vs. Pronóstico (modelo) — Test y Backtest")
+    plt.grid(True, alpha=0.25); plt.legend()
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    plt.tight_layout(); plt.savefig(out_path); plt.close()
+
+def _print_pred_stats(name: str, y_pred) -> None:
+    import numpy as np
+    arr = pd.Series(y_pred).astype(float).to_numpy()
+    nuniq = int(len(pd.unique(arr.round(6))))
+    print(f"  [{name}] min={arr.min():.3f}  max={arr.max():.3f}  std={arr.std():.3f}  n_unique≈{nuniq}")
+
+# ─────────────────────────────────── Main ─────────────────────────────────────
+def main() -> None:
+    # m01 · Ingesta
+    banner("MÓDULO m01 • Ingesta (importación del dataset)")
+    df = _load_dataset()
+
+    if TIME_COLUMN in df.columns:
+        pre = len(df)
+        df = df[df[TIME_COLUMN] >= "2022-01-01"].reset_index(drop=True)
+        step("1.4", f"Filtro post-2022: {pre} → {len(df)} filas")
+
+    step("1.5", f"Target = '{TARGET_ALIAS}' | Time = '{TIME_COLUMN}'")
+    cols_front = [c for c in [TIME_COLUMN, TARGET_ALIAS] if c in df.columns]
+    other_cols = [col for col in df.columns if col not in (TIME_COLUMN, TARGET_ALIAS)]
+    print(df[cols_front + other_cols[:6]].head(3).to_string())
+
+    # m02 · EDA
+    banner("MÓDULO m02 • EDA univariado"); m02_run(df); print("m02 ✓ EDA OK.", flush=True)
+
+    # m03 · Data validation
+    banner("MÓDULO m03 • Data validation")
+    res = validate_srv.run(df, fit_profile=True)
+    if not getattr(res, "valido", True):
+        raise RuntimeError("m03 × Validación fallida")
+    print("m03 ✓ Perfil y reporte en output/validation\n", flush=True)
+
+    # m04 · Split temporal
+    banner("MÓDULO m04 • Split temporal")
+    splitter = RobustDataSplitter(
+        df, split_method="time", target_column=TARGET_ALIAS, time_column=TIME_COLUMN,
+        train_size=0.7, test_size=0.2, backtest_size=0.1,
+    )
+    train_df, test_df, back_df = splitter.split_data()
+    train_df.to_parquet(RAW_PARTITIONED_DIR / "train_df.parquet")
+    test_df.to_parquet(RAW_PARTITIONED_DIR / "test_df.parquet")
+    back_df.to_parquet(RAW_PARTITIONED_DIR / "backtest_df.parquet")
+    print("m04 ✓ Particiones guardadas en data/raw/partitioned/\n", flush=True)
+
+    # m05 · Feature engineering
+    banner("MÓDULO m05 • Feature engineering")
+    fe_run()
+    print("m05 ✓ Exportados: X_train_processed.parquet, X_test_processed.parquet, X_backtest_processed.parquet", flush=True)
+    print("m05.3) También se exporta el transformador inicial ONNX en: transformers/transformador_inicial.onnx\n", flush=True)
+
+    # m06 · Feature selection
+    banner("MÓDULO m06 • Feature Selection (filter → frame)")
+    X_tr_sel, X_te_sel, X_bk_sel, logs = fs_run(techniques=["filter", "frame"], save_logs=True)
+    print("m06 ✓ Artefactos en data/processed/pipeline_selection/\n", flush=True)
+
+    # Preview m06
+    try:
+        tr_raw = pd.read_parquet(RAW_PARTITIONED_DIR / "train_df.parquet")[[TIME_COLUMN, TARGET_ALIAS]]
+        preview = pd.concat([tr_raw.reset_index(drop=True).head(5), X_tr_sel.reset_index(drop=True).head(5)], axis=1)
+        print("[6.2] Preview X_train_selected (head 5 con 'semana' y 'target'):")
+        print(preview.to_string(index=False))
+    except Exception:
+        pass
+
+    # m07 · Search + ONNX + Plot
     banner("MÓDULO m07 • Búsqueda de modelo (FLAML) + Predicción ONNX")
+    X_train_proc = pd.read_parquet(FE_DIR / "X_train_processed.parquet")
+    X_test_proc  = pd.read_parquet(FE_DIR / "X_test_processed.parquet")
+    X_back_proc  = pd.read_parquet(FE_DIR / "X_backtest_processed.parquet")
 
-    # 7.1 Cargar matrices procesadas (FE) para entrenamiento de regresión
-    step("7.1", "Cargando X_train/test procesados y separando target…")
-    X_tr_proc_full = pd.read_parquet(FE_DIR / "X_train_processed.parquet")
-    X_te_proc_full = pd.read_parquet(FE_DIR / "X_test_processed.parquet")
-    sem_train = X_tr_proc_full[TIME_COLUMN] if TIME_COLUMN in X_tr_proc_full.columns else None
-    sem_test  = X_te_proc_full[TIME_COLUMN] if TIME_COLUMN in X_te_proc_full.columns else None
-    y_train = X_tr_proc_full.pop(TARGET_ALIAS)
-    y_test  = X_te_proc_full.pop(TARGET_ALIAS)
+    y_train = X_train_proc.pop(TARGET_ALIAS)
+    y_test  = X_test_proc.pop(TARGET_ALIAS)
+    y_back  = X_back_proc.pop(TARGET_ALIAS)
 
-    # Alinear columnas por seguridad (features)
-    X_tr_proc, X_te_proc = X_tr_proc_full.align(X_te_proc_full, join="left", axis=1, fill_value=0.0)
-    step("7.1", f"Shapes → X_train:{X_tr_proc.shape}, X_test:{X_te_proc.shape}")
+    y_train = pd.to_numeric(y_train, errors="coerce").fillna(0).round().astype(int)
+    y_test  = pd.to_numeric(y_test,  errors="coerce").fillna(0).round().astype(int)
+    y_back  = pd.to_numeric(y_back,  errors="coerce").fillna(0).round().astype(int)
 
-    # 7.2 FLAML (regresión) — exportable a ONNX
+    time_test = pd.read_parquet(RAW_PARTITIONED_DIR / "test_df.parquet")[TIME_COLUMN]
+    time_back = pd.read_parquet(RAW_PARTITIONED_DIR / "backtest_df.parquet")[TIME_COLUMN]
+
+    for d in (X_train_proc, X_test_proc, X_back_proc):
+        d.drop(columns=[TIME_COLUMN], errors="ignore", inplace=True)
+
+    X_train_proc, X_test_proc = X_train_proc.align(X_test_proc, join="left", axis=1, fill_value=0.0)
+    X_train_proc, X_back_proc = X_train_proc.align(X_back_proc, join="left", axis=1, fill_value=0.0)
+
+    step("7.1", f"Shapes → X_train:({X_train_proc.shape[0]}, {X_train_proc.shape[1]}), X_test:({X_test_proc.shape[0]}, {X_test_proc.shape[1]})")
+
     step("7.2", "Ejecutando FLAML (regresión)…")
     automl = run_model_selector(
-        X_tr_proc, y_train, X_test=X_te_proc, y_test=y_test,
-        framework="flaml", task="regression", time_budget=180,
-        metric="mae", log_file=get_log_path("flaml.log")
+        X_train_proc, y_train,
+        X_test=X_test_proc, y_test=y_test,
+        framework="flaml", task="regression", time_budget=180, metric="mae"
     )
-    metrics_reg = automl.evaluate(X_te_proc, y_test)
-    print(f"       Mejor estimador: {automl.name}")
-    print(f"       Métricas (test): {metrics_reg}")
+    print(f"  Mejor estimador: {automl.name}")
+
+    best_model = automl.get_best_model()
+    sk_model = getattr(best_model, "model", best_model)
+
+    # Métricas (test) sin FutureWarning
     try:
-        rank = automl.get_model_ranking()
-        if hasattr(rank, "to_csv"):
-            LOGS_DIR.mkdir(parents=True, exist_ok=True)
-            rank_path = LOGS_DIR / "model_search_ranking.csv"
-            rank.to_csv(rank_path, index=False)
-            print(f"       Ranking guardado en {rank_path.relative_to(PROJECT_ROOT)}")
+        from sklearn.metrics import mean_absolute_error, mean_squared_error, root_mean_squared_error, r2_score
+        Xte_m = _ensure_same_columns(sk_model, X_test_proc.copy())
+        y_pred_prev = sk_model.predict(Xte_m)
+        metrics_test = {
+            "MAE": float(mean_absolute_error(y_test, y_pred_prev)),
+            "MSE": float(mean_squared_error(y_test, y_pred_prev)),
+            "RMSE": float(root_mean_squared_error(y_test, y_pred_prev)),
+            "R2": float(r2_score(y_test, y_pred_prev)),
+        }
+        print(f"  Métricas (test): {metrics_test}")
+    except Exception:
+        from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+        Xte_m = _ensure_same_columns(sk_model, X_test_proc.copy())
+        y_pred_prev = sk_model.predict(Xte_m)
+        metrics_test = {
+            "MAE": float(mean_absolute_error(y_test, y_pred_prev)),
+            "MSE": float(mean_squared_error(y_test, y_pred_prev)),
+            "RMSE": float(mean_squared_error(y_test, y_pred_prev) ** 0.5),
+            "R2": float(r2_score(y_test, y_pred_prev)),
+        }
+        print(f"  Métricas (test): {metrics_test}")
+
+    # Ranking y features
+    try:
+        rk = automl.get_model_ranking()
+        (LOG_DIR / "model_search_ranking.csv").parent.mkdir(parents=True, exist_ok=True)
+        rk.to_csv(LOG_DIR / "model_search_ranking.csv", index=False)
+        print("  Ranking guardado en logs/model_search_ranking.csv")
     except Exception:
         pass
+    f_json = _save_features_used(list(X_train_proc.columns))
+    print(f"  Features usadas guardadas en {f_json}")
 
-    # 7.3 Exportar modelo a ONNX (campeón regresión) + guardar columnas usadas
+    # Exportar ONNX SOLO del modelo ganador
     step("7.3", "Exportando modelo ganador a ONNX…")
-    MODELS_DIR.mkdir(parents=True, exist_ok=True)
-    export_model_onnx(automl.get_best_model(), X_tr_proc, MODELS_DIR, version="v1")
-
-    # Guardar orden/tamaño de features esperados por el ONNX
     try:
-        expected_n = getattr(automl.get_best_model(), "n_features_in_", X_tr_proc.shape[1])
-        # quitamos 'semana' si estuviera y recortamos a expected_n
-        features_used = [c for c in X_tr_proc.columns if c != TIME_COLUMN][:int(expected_n)]
-        LOGS_DIR.mkdir(parents=True, exist_ok=True)
-        (LOGS_DIR / "model_features_used.json").write_text(
-            json.dumps(features_used, indent=2), encoding="utf-8"
+        model_path = _export_onnx_selected_only(
+            sk_model,
+            _ensure_same_columns(sk_model, X_train_proc.copy()),
+            MODELS_DIR, version="v1"
         )
-        print(f"       Features ONNX guardados en logs/model_features_used.json "
-              f"(expected_n={expected_n}, columnas={len(features_used)})")
+        print(f"  ✓ Modelo ONNX en {model_path}")
+        onnx_ok = True
     except Exception as e:
-        print(f"       Aviso: no se pudieron guardar las columnas usadas ({e}).")
+        onnx_ok = False
+        print(f"  × No fue posible convertir a ONNX: {e}")
 
-    # 7.5 Predicción con ONNX + Gráfica unificada (reales vs pronósticos)
+    # Predicción + gráfica (ahora indexada por fecha)
+    step("7.5", "Inferencia + generación de gráfico…")
     try:
-        step("7.5", "Cargando modelo ONNX y generando pronósticos…")
-        import onnxruntime as ort
-        import numpy as _np
+        Xte_plot = _ensure_same_columns(sk_model, X_test_proc.copy())
+        Xbk_plot = _ensure_same_columns(sk_model, X_back_proc.copy())
+        y_pred_test = sk_model.predict(Xte_plot)
+        y_pred_back = sk_model.predict(Xbk_plot)
 
-        onnx_path = MODELS_DIR / "modelo_v1.onnx"
-        if not onnx_path.exists():
-            raise FileNotFoundError(f"No se encontró el modelo ONNX en {onnx_path}")
-        sess = ort.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
-        in_name   = sess.get_inputs()[0].name
-        expected_n_onnx = sess.get_inputs()[0].shape[1]  # e.g., 15
+        # DEBUG/chequeo: ¿son constantes?
+        _print_pred_stats("pred_test", y_pred_test)
+        _print_pred_stats("pred_back", y_pred_back)
 
-        # Cargar lista de columnas usadas por el modelo
-        feat_file = LOGS_DIR / "model_features_used.json"
-        if feat_file.exists():
-            features_used = json.loads(feat_file.read_text(encoding="utf-8"))
-        else:
-            features_used = [c for c in X_tr_proc.columns if c != TIME_COLUMN][:int(expected_n_onnx)]
-
-        def _prepare(df):
-            arr = df.reindex(columns=features_used, fill_value=0.0).to_numpy(dtype=_np.float32, copy=False)
-            if expected_n_onnx is not None and arr.shape[1] != expected_n_onnx:
-                raise ValueError(f"Input shape mismatch: got {arr.shape[1]} cols, expected {expected_n_onnx}.")
-            return arr
-
-        # Cargar backtest procesado (para reales/fechas y features)
-        X_bk_proc_full = pd.read_parquet(FE_DIR / "X_backtest_processed.parquet")
-        sem_back = X_bk_proc_full[TIME_COLUMN] if TIME_COLUMN in X_bk_proc_full.columns else None
-        y_back = X_bk_proc_full.pop(TARGET_ALIAS)
-
-        X_te_inf = _prepare(X_te_proc)
-        X_bk_inf = _prepare(X_bk_proc_full)
-
-        # Predicciones ONNX
-        y_pred_test = sess.run(None, {in_name: X_te_inf})[0].ravel()
-        y_pred_back = sess.run(None, {in_name: X_bk_inf})[0].ravel()
-
-        # Fechas robustas para eje X
-        dt_test = _to_datetime_semana(sem_test) if sem_test is not None else None
-        dt_back = _to_datetime_semana(sem_back) if sem_back is not None else None
-
-        # Figura única: reales (test+back) vs pronóstico ONNX (test/back)
-        plt.figure(figsize=(12, 6))
-
-        # Línea de reales
-        if dt_test is not None and dt_back is not None:
-            x_real = pd.concat([dt_test.reset_index(drop=True), dt_back.reset_index(drop=True)], ignore_index=True)
-        else:
-            x_real = pd.RangeIndex(len(y_test) + len(y_back))
-        y_real = pd.concat([y_test.reset_index(drop=True), y_back.reset_index(drop=True)], ignore_index=True)
-        plt.plot(x_real, y_real, marker='o', linestyle='-', label='Real (Test + Backtest)')
-
-        # Pronósticos
-        if dt_test is not None:
-            plt.plot(dt_test, y_pred_test, marker='x', linestyle='--', label='Pronóstico ONNX (Test)')
-        else:
-            plt.plot(range(len(y_pred_test)), y_pred_test, marker='x', linestyle='--', label='Pronóstico ONNX (Test)')
-
-        if dt_back is not None:
-            plt.plot(dt_back, y_pred_back, marker='x', linestyle='--', label='Pronóstico ONNX (Backtest)')
-        else:
-            plt.plot(range(len(y_pred_back)), y_pred_back, marker='x', linestyle='--', label='Pronóstico ONNX (Backtest)')
-
-        plt.xlabel("Fecha" if (dt_test is not None or dt_back is not None) else "Índice")
-        plt.ylabel(TARGET_ALIAS)
-        plt.title("Reales vs. Pronóstico (modelo ONNX) — Test y Backtest")
-        plt.grid(True); plt.legend(); plt.xticks(rotation=45); plt.tight_layout()
-
-        SEARCH_OUT_DIR.mkdir(parents=True, exist_ok=True)
-        fig_path = SEARCH_OUT_DIR / "forecast_from_onnx.png"
-        plt.savefig(fig_path); plt.close()
-        print(f"       Gráfica guardada en: {fig_path.relative_to(PROJECT_ROOT)}")
+        plot_dir = OUTPUT_DIR / "search_model"
+        plot_path = plot_dir / "reales_vs_pronostico.png"
+        _plot_real_vs_pred(time_test, y_test, y_pred_test, time_back, y_back, y_pred_back, plot_path)
+        print(f"  ✓ Gráfica guardada en {plot_path}")
     except Exception as e:
-        print(f"       (7.5) No se pudo generar la gráfica ONNX: {e}")
+        print(f"  × No se pudo generar la gráfica: {e}")
+        if not onnx_ok:
+            print("  Sugerencia: revisa compatibilidad ONNX y columnas usadas.")
 
-    banner("PIPELINE2 • FINALIZADO ✅")
+    print("\nPIPELINE2 · FINALIZADO ✅\n")
 
 
 if __name__ == "__main__":
