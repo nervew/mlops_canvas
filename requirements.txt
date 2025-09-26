@@ -1,20 +1,21 @@
-# Núcleo científico (compatible Py3.12 / NumPy 1.x)
+# Núcleo científico (alineado para scikit-plot y mljar-supervised)
 numpy==1.26.4
-scipy==1.11.4
+scipy==1.11.4          # <-- clave: scikit-plot 0.3.7 usa scipy.interp (eliminado en SciPy>=1.12) :contentReference[oaicite:3]{index=3}
 pandas==2.2.3
 matplotlib==3.8.4
 pyarrow==21.0.0
 joblib==1.5.2
 threadpoolctl==3.6.0
 
-# ML / AutoML
-scikit-learn==1.4.2
+# ML y AutoML
+scikit-learn==1.4.2    # <-- fijado para evitar upgrades al instalar ONNX stack
 xgboost==1.7.6
 lightgbm==4.6.0
 catboost==1.2.8
 flaml[automl]==2.1.2
 mljar-supervised==1.0.2
-scikit-plot==0.3.7        # requiere SciPy < 1.12
+scikit-plot==0.3.7     # explícito (lo arrastra mljar-supervised), sin mantenimiento desde 2018 :contentReference[oaicite:4]{index=4}
+scikit-plot==0.3.7
 dtreeviz==2.2.2
 shap==0.48.0
 category-encoders==2.6.3
@@ -22,25 +23,25 @@ seaborn==0.13.2
 wordcloud==1.9.4
 optuna==3.6.1
 
-# ONNX stack
-pybind11==2.13.6
+# ONNX stack (binarios compatibles con NumPy 1.x)
+pybind11==3.0.1
 onnx==1.16.0
 onnxruntime==1.18.1
 onnxmltools==1.13.0
 onnxconverter-common==1.16.0
 skl2onnx==1.19.1
-protobuf==4.25.3
+protobuf==6.32.1
 flatbuffers==25.2.10
 coloredlogs==15.0.1
 humanfriendly==10.0
 sympy==1.14.0
 packaging==25.0
 
-# Spark (omitir si ya lo trae el cluster)
-# pyspark==4.0.1
-# py4j==0.10.9.9
+# Spark y utilidades
+pyspark==4.0.1
+py4j==0.10.9.9
 
-# Utilidades
+# Persistencia / utilidades varias
 SQLAlchemy==2.0.43
 sweetviz==2.3.1
 openml==0.15.1
