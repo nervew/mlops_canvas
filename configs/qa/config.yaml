@@ -1,0 +1,6 @@
+online:
+  replicas: 3
+  min_psi: 0.2
+batch:
+  input_path: adl://qa/data/inference
+  output_path: adl://qa/data/predictions

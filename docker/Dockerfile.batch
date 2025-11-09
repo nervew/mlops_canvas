@@ -1,0 +1,8 @@
+FROM mcr.microsoft.com/azureml/openmpi4.1.0-ubuntu20.04:20231016.v1
+
+WORKDIR /app
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+COPY src/inference/batch ./src/inference/batch
+COPY src/inference/online ./src/inference/online
+CMD ["python", "src/inference/batch/batch_job.py", "--input", "/inputs", "--output", "/outputs", "--scoring-date", "$(date +%F)"]

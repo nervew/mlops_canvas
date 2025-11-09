@@ -1,0 +1,9 @@
+FROM mcr.microsoft.com/azureml/openmpi4.1.0-ubuntu20.04:20231016.v1
+
+ENV AZUREML_ENVIRONMENT=training
+WORKDIR /app
+
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+COPY src/training ./src/training
+CMD ["python", "src/training/train.py", "--data", "/inputs", "--parameters", "params.json", "--output", "/outputs"]

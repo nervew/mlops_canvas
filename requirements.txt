@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+prometheus-client
+mlflow
+pandas
+scikit-learn
+numpy
+pandera
+pytest
+flake8
+opentelemetry-sdk
+azure-monitor-opentelemetry-exporter
+httpx

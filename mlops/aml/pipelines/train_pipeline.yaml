@@ -1,0 +1,62 @@
+$schema: https://azuremlschemas.azureedge.net/latest/pipelineJob.schema.json
+name: train-pipeline
+experiment_name: mlops-train
+description: End-to-end training pipeline
+settings:
+  default_compute: azureml:cpu-cluster
+  continue_on_step_failure: false
+  force_rerun: false
+inputs:
+  raw_data_path:
+    type: uri_folder
+    mode: ro_mount
+    path: azureml://datastores/workspaceblobstore/paths/raw
+  parameters:
+    type: uri_file
+    path: azureml://datastores/workspaceblobstore/paths/params/params.yaml
+jobs:
+  data_prep:
+    type: command
+    component: azureml:data-prep:1
+    inputs:
+      raw_data: ${{parent.inputs.raw_data_path}}
+    outputs:
+      prepared_data:
+        type: uri_folder
+  train:
+    type: command
+    component: azureml:train:1
+    inputs:
+      data: ${{parent.jobs.data_prep.outputs.prepared_data}}
+      parameters: ${{parent.inputs.parameters}}
+    outputs:
+      model_output:
+        type: uri_folder
+    settings:
+      continue_on_step_failure: false
+  evaluate:
+    type: command
+    component: azureml:evaluate:1
+    inputs:
+      model: ${{parent.jobs.train.outputs.model_output}}
+      validation_data: ${{parent.jobs.data_prep.outputs.prepared_data}}
+    outputs:
+      evaluation_report:
+        type: uri_folder
+  register:
+    type: command
+    component: azureml:register:1
+    inputs:
+      model_input: ${{parent.jobs.train.outputs.model_output}}
+      evaluation_report: ${{parent.jobs.evaluate.outputs.evaluation_report}}
+    outputs:
+      model_metadata:
+        type: uri_folder
+  promote:
+    type: command
+    component: azureml:promote:1
+    inputs:
+      model_metadata: ${{parent.jobs.register.outputs.model_metadata}}
+    environment_variables:
+      PROMOTE_IF_AUC_DROP: "5"
+      PROMOTE_IF_PSI: "0.2"
