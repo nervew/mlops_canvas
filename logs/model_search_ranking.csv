@@ -1,2 +1,2 @@
 estimator,metric_val,train_time,config
-extra_tree,102.18506368950183,,"{'n_estimators': 89, 'max_leaves': 7, 'max_features': 0.42877384477930147}"
+extra_tree,102.18506368950183,,"{'n_estimators': 89, 'max_leaves': 7, 'max_features': 0.43483843583425}"

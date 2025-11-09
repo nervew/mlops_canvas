@@ -1,4 +1,4 @@
-# src/app/pipeline3.py
+# src/app/pipeline.py
 from __future__ import annotations
 
 import json
@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import List
 
 # ─────────────────────────── Configuración adaptable ───────────────────────────
-TIME_COLUMN  = "semana"                     # nombre “estándar” temporal
+TIME_COLUMN  = "semana"                     # variable temporal
 TARGET_ALIAS = "target"                     # alias estándar de target
 OLD_TARGET   = "y_usuarios_nuevos_semana"   # nombre antiguo en datasets reales
 # ────────────────────────────── Rutas de proyecto ──────────────────────────────
@@ -40,7 +40,6 @@ from .m00_instalador.service import install_requirements
 install_requirements()
 print("m00 ✓ Dependencias listas\n", flush=True)
 
-# A partir de aquí podemos importar con seguridad
 import pandas as pd
 from sklearn.exceptions import ConvergenceWarning
 warnings.simplefilter("ignore", ConvergenceWarning)
@@ -104,8 +103,10 @@ def _load_dataset() -> pd.DataFrame:
     except Exception:
         print(df.head(3).to_string(index=False))
     return df
+###############################################################################
+# ─────────────────────────────────── Main ────────────────────────────────────
+###############################################################################
 
-# ─────────────────────────────────── Main ─────────────────────────────────────
 def main() -> None:
     # m01 · Ingesta
     banner("MÓDULO m01 • Ingesta (importación del dataset)")
@@ -188,7 +189,7 @@ def main() -> None:
 
     step("7.1", f"Shapes → X_train:({X_train_proc.shape[0]}, {X_train_proc.shape[1]}), X_test:({X_test_proc.shape[0]}, {X_test_proc.shape[1]})")
 
-    step("7.2", "Ejecutando FLAML (regresión)…")
+    step("7.2", "Ejecutando FLAML …")
     automl = run_model_selector(
         X_train_proc, y_train,
         X_test=X_test_proc, y_test=y_test,
