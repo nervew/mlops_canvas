@@ -1,0 +1,21 @@
+$schema: https://azuremlschemas.azureedge.net/latest/pipelineJob.schema.json
+name: batch-inference
+experiment_name: mlops-batch
+inputs:
+  scoring_date:
+    type: string
+  input_path:
+    type: uri_folder
+    mode: ro_mount
+  output_path:
+    type: uri_folder
+jobs:
+  batch_inference:
+    type: command
+    component: azureml:batch-inference:1
+    inputs:
+      scoring_date: ${{parent.inputs.scoring_date}}
+      input_path: ${{parent.inputs.input_path}}
+      output_path: ${{parent.inputs.output_path}}
+    environment_variables:
+      FAIL_THRESHOLD: "0.005"

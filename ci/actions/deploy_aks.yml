@@ -1,0 +1,21 @@
+name: Deploy AKS Service
+on:
+  workflow_call:
+    inputs:
+      release_name:
+        required: true
+        type: string
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Helm upgrade
+        run: |
+          az aks get-credentials --resource-group ${{ secrets.AKS_RG }} --name ${{ secrets.AKS_NAME }} --admin
+          helm upgrade --install ${{ inputs.release_name }} helm/online-service --namespace mlops --create-namespace

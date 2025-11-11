@@ -1,0 +1,5 @@
+{
+  "target": "label",
+  "n_estimators": 200,
+  "max_depth": null
+}
