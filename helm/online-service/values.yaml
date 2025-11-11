@@ -1,0 +1,21 @@
+image:
+  repository: example.azurecr.io/online
+  tag: latest
+  pullPolicy: IfNotPresent
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 60
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: mlops.example.com
+      paths:
+        - path: /
+          pathType: Prefix

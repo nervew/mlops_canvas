@@ -1,0 +1,17 @@
+name: Scan Docker Image
+on:
+  workflow_call:
+    inputs:
+      image:
+        required: true
+        type: string
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Trivy
+        uses: aquasecurity/trivy-action@v0.17.0
+        with:
+          image-ref: ${{ inputs.image }}
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'

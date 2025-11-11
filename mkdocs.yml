@@ -1,0 +1,15 @@
+site_name: Azure MLOps Canvas
+site_description: Documentación técnica y operativa
+nav:
+  - Inicio: README.md
+  - Instalación: INSTALL.md
+  - Onboarding: GETTING_STARTED.md
+  - Arquitectura: ARCHITECTURE.md
+  - Operaciones: OPERATIONS.md
+  - Seguridad: SECURITY.md
+  - API: [{Referencia: API/API_REFERENCE.md}, {OpenAPI: API/openapi.yaml}]
+  - ADRs: [{Plantilla: ADR/ADR-0001-plantilla.md}, {Terraform: ADR/ADR-0002-terraform-como-iac.md}, {CI/CD: ADR/ADR-0003-cicd-multientorno.md}]
+  - Guías: [{Contribuir: CONTRIBUTING.md}, {Estilo: STYLEGUIDE.md}, {Troubleshooting: TROUBLESHOOTING.md}, {Releases: RELEASES.md}, {Glosario: GLOSSARY.md}, {FAQ: FAQ.md}]
+theme: {name: material, language: es}
+markdown_extensions: [admonition, toc, tables]
+plugins: [search, mermaid2]

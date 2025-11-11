@@ -1,0 +1,6 @@
+online:
+  replicas: 2
+  min_psi: 0.2
+batch:
+  input_path: adl://dev/data/inference
+  output_path: adl://dev/data/predictions
