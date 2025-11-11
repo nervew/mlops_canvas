@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import pandera as pa
-from pandera.typing import DataFrame
 
 
 class InferenceInputSchema(pa.SchemaModel):

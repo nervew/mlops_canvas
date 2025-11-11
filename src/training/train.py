@@ -37,7 +37,12 @@ def main() -> None:
     X = df.drop(columns=[params["target"]])
     y = df[params["target"]]
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(
+        X,
+        y,
+        test_size=0.2,
+        random_state=42,
+    )
 
     pipeline = Pipeline(
         steps=[
@@ -63,9 +68,13 @@ def main() -> None:
         mlflow.log_metric("auc", auc)
         args.output.mkdir(parents=True, exist_ok=True)
         model_path = args.output / "model.pkl"
-        mlflow.sklearn.save_model(pipeline, path=str(args.output / "mlflow-model"))
-        mlflow.log_artifact(str(args.output / "mlflow-model"), artifact_path="model")
-        mlflow.log_artifact(args.data / "metadata.json", artifact_path="data")
+        mlflow_model_path = args.output / "mlflow-model"
+        mlflow.sklearn.save_model(pipeline, path=str(mlflow_model_path))
+        mlflow.log_artifact(str(mlflow_model_path), artifact_path="model")
+        mlflow.log_artifact(
+            args.data / "metadata.json",
+            artifact_path="data",
+        )
         mlflow.log_metric("roc_auc", auc)
         model_path.write_bytes(b"")
 

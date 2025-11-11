@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from threading import Lock
-from typing import Any, ClassVar, Optional
+from typing import ClassVar, Optional
 
 import numpy as np
 

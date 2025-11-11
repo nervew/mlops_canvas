@@ -1,9 +1,7 @@
-"""
-robust_data_splitter.py
+"""Herramientas para dividir datasets en subconjuntos robustos.
 
-Clase RobustDataSplitter para dividir datasets en train, test y backtest,
-manteniendo balanceo y estabilidad de variables con distintas opciones de split,
-reportes numéricos y visuales, y optimización de memoria.
+El módulo ofrece utilidades para crear splits train, test y backtest con
+estratificación, métricas de estabilidad y reportes visuales.
 """
 
 import pandas as pd
@@ -15,37 +13,7 @@ from typing import List, Optional, Tuple, Union
 
 
 class RobustDataSplitter:
-    """
-    Divide un DataFrame en conjuntos train, test y backtest de manera robusta,
-    garantizando balanceo de la variable objetivo y columnas de estratificación,
-    con métricas de estabilidad y opciones de split aleatorio, temporal o por métrica.
-
-    Atributos
-    ---------
-    df : pd.DataFrame
-        DataFrame original.
-    split_method : str
-        Método de división ('random', 'time', 'metric').
-    target_column : Optional[str]
-        Columna objetivo para estratificación prioritaria.
-    stratify_columns : List[str]
-        Columnas adicionales para estratificación multivariada.
-    time_column : Optional[str]
-        Columna de tiempo para split cronológico.
-    metric_column : Optional[str]
-        Columna numérica para split basado en métricas.
-    train_size, test_size, backtest_size : Union[float,str,pd.Timestamp]
-        Proporciones o puntos de corte para cada subset.
-    memory_threshold : float
-        Umbral de memoria (bytes) para activar splitting por chunks.
-    chunk_size : int
-        Tamaño de chunk (filas) para splits optimizados.
-
-    Salidas
-    -------
-    train_df, test_df, backtest_df : pd.DataFrame
-        Subconjuntos resultantes tras el split.
-    """
+    """Divide un DataFrame en train, test y backtest de forma estable."""
 
     def __init__(
         self,
@@ -61,35 +29,7 @@ class RobustDataSplitter:
         memory_threshold: float = 500e6,
         chunk_size: int = 1_000_000
     ) -> None:
-        """
-        Inicializa el splitter con parámetros de configuración.
-
-        Parámetros
-        ----------
-        df : pd.DataFrame
-            DataFrame a dividir.
-        split_method : str, opcional
-            'random', 'time' o 'metric'. Por defecto 'random'.
-        target_column : Optional[str]
-            Columna objetivo para estratificación (requerido si split_method='random').
-        stratify_columns : Optional[List[str]]
-            Columnas adicionales para estratificar.
-        time_column : Optional[str]
-            Columna datetime para división cronológica.
-        metric_column : Optional[str]
-            Columna numérica para split basado en cuantiles.
-        train_size, test_size, backtest_size : float o str o pd.Timestamp
-            Proporción (si float) o punto de corte (si str o Timestamp).
-        memory_threshold : float
-            Umbral de memoria para splits por chunks.
-        chunk_size : int
-            Filas por chunk en splits optimizados.
-
-        Lanza
-        -----
-        ValueError
-            Si los parámetros no son consistentes.
-        """
+        """Inicializa el splitter con parámetros de configuración básicos."""
         if not isinstance(df, pd.DataFrame):
             raise ValueError('df debe ser un pandas DataFrame.')
         self.df = df.copy()
@@ -110,41 +50,41 @@ class RobustDataSplitter:
         self._validate_parameters()
 
     def _validate_parameters(self) -> None:
-        """
-        Valida la consistencia de parámetros según el método de división.
-
-        Lanza
-        -----
-        ValueError
-            Si faltan parámetros obligatorios o las proporciones no suman 1.
-        """
+        """Valida parámetros según el método de división."""
         métodos = ['random', 'time', 'metric']
         if self.split_method not in métodos:
             raise ValueError(f"split_method debe ser uno de {métodos}.")
         if self.split_method == 'random':
-            total = self.train_size + self.test_size + self.backtest_size  # type: ignore
+            total = (
+                self.train_size + self.test_size + self.backtest_size
+            )  # type: ignore[operator]
             if not np.isclose(total, 1.0):
-                raise ValueError('train_size + test_size + backtest_size debe sumar 1.0.')
+                raise ValueError(
+                    'train_size + test_size + backtest_size debe sumar 1.0.'
+                )
             if not self.target_column:
-                raise ValueError('Debe especificar target_column para split aleatorio.')
+                raise ValueError(
+                    'Debe especificar target_column para split aleatorio.'
+                )
         if self.split_method == 'time' and not self.time_column:
-            raise ValueError('Debe especificar time_column para split por tiempo.')
+            raise ValueError(
+                'Debe especificar time_column para split por tiempo.'
+            )
         if self.split_method == 'metric':
             if not self.metric_column:
-                raise ValueError('Debe especificar metric_column para split por métrica.')
-            total = self.train_size + self.test_size + self.backtest_size  # type: ignore
+                raise ValueError(
+                    'Debe especificar metric_column para split por métrica.'
+                )
+            total = (
+                self.train_size + self.test_size + self.backtest_size
+            )  # type: ignore[operator]
             if not np.isclose(total, 1.0):
-                raise ValueError('train_size + test_size + backtest_size debe sumar 1.0.')
+                raise ValueError(
+                    'train_size + test_size + backtest_size debe sumar 1.0.'
+                )
 
     def split_data(self) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-        """
-        Ejecuta el split según el método configurado.
-
-        Returns
-        -------
-        Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]
-            train_df, test_df y backtest_df.
-        """
+        """Ejecuta el split según el método configurado."""
         if self._is_large_dataset():
             return self._memory_optimized_split()
         if self.split_method == 'random':
@@ -160,29 +100,16 @@ class RobustDataSplitter:
         columns: Optional[List[str]] = None,
         buckets: int = 10
     ) -> pd.DataFrame:
-        """
-        Calcula PSI, JS Divergence, KS, y diferencias de medias/varianzas
-        entre dos DataFrames para columnas específicas.
-
-        Parámetros
-        ----------
-        ref_df : pd.DataFrame, opcional
-            DataFrame de referencia; por defecto train.
-        curr_df : pd.DataFrame, opcional
-            DataFrame a comparar; por defecto test.
-        columns : List[str], opcional
-            Columnas a evaluar; por defecto target + stratify.
-        buckets : int
-            Número de bins para PSI/JS.
-
-        Returns
-        -------
-        pd.DataFrame
-            Métricas indexadas por columna.
-        """
+        """Calcula métricas PSI, JS, KS y diferencias de medias/varianzas."""
         ref = ref_df or self.train_df  # type: ignore
         curr = curr_df or self.test_df  # type: ignore
-        cols = columns or [self.target_column] + self.stratify_columns  # type: ignore
+        if columns is None:
+            cols = [
+                col for col in [self.target_column, *self.stratify_columns]
+                if col is not None
+            ]
+        else:
+            cols = columns
         report = []
         for col in cols:
             exp = ref[col].dropna()  # type: ignore
@@ -203,31 +130,40 @@ class RobustDataSplitter:
         df_report = pd.DataFrame(report).set_index('column')
         return df_report
 
-    def generate_visual_report(self, columns: Optional[List[str]] = None) -> None:
-        """
-        Genera histogramas, boxplots y CDF para comparar distribuciones
-        en train, test y backtest para las columnas indicadas.
-
-        Parámetros
-        ----------
-        columns : List[str], opcional
-            Columnas a graficar; por defecto target, stratify y metric.
-        """
+    def generate_visual_report(
+        self,
+        columns: Optional[List[str]] = None
+    ) -> None:
+        """Genera reportes visuales comparativos por columna."""
         seen = set()
         cols = []
-        for col in (columns or [self.target_column] + self.stratify_columns + ([self.metric_column] if self.metric_column else [])):
+        metric_cols: List[Optional[str]] = []
+        if self.metric_column:
+            metric_cols.append(self.metric_column)
+        default_cols: List[Optional[str]] = [
+            self.target_column,
+            *self.stratify_columns,
+        ]
+        source_cols = columns or [
+            col for col in default_cols + metric_cols if col is not None
+        ]
+        for col in source_cols:
             if col not in seen:
                 seen.add(col)
                 cols.append(col)
 
         for col in cols:
             plt.figure(figsize=(10, 6))
-            data = [self.train_df[col].dropna(), self.test_df[col].dropna(), self.backtest_df[col].dropna()]  # type: ignore
+            data = [
+                self.train_df[col].dropna(),  # type: ignore[index]
+                self.test_df[col].dropna(),
+                self.backtest_df[col].dropna()
+            ]
             labels = ['train', 'test', 'backtest']
             # Histograma
             plt.subplot(3, 1, 1)
-            for d, label in zip(data, labels):
-                plt.hist(d, bins=20, alpha=0.5, label=label)
+            for series, label in zip(data, labels):
+                plt.hist(series, bins=20, alpha=0.5, label=label)
             plt.title(f'Histogram of {col}')
             plt.legend()
             # Boxplot
@@ -236,47 +172,41 @@ class RobustDataSplitter:
             plt.title(f'Boxplot of {col}')
             # CDF
             plt.subplot(3, 1, 3)
-            for d, label in zip(data, labels):
-                sorted_d = np.sort(d)
-                cdf = np.arange(len(sorted_d)) / float(len(sorted_d))
-                plt.plot(sorted_d, cdf, label=label)
+            for series, label in zip(data, labels):
+                sorted_series = np.sort(series)
+                cdf = np.arange(len(sorted_series)) / float(len(sorted_series))
+                plt.plot(sorted_series, cdf, label=label)
             plt.title(f'Cumulative Distribution of {col}')
             plt.legend()
             plt.tight_layout()
             plt.show()
 
     def _random_split(self) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-        """
-        Split estratificado aleatorio en tres conjuntos.
-
-        Returns
-        -------
-        Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]
-            train, test y backtest.
-        """
+        """Realiza un split aleatorio estratificado en tres subconjuntos."""
         strata = self.df[self.target_column].astype(str)  # type: ignore
         for col in self.stratify_columns:
             strata += '_' + self.df[col].astype(str)
         temp_df, back = train_test_split(
-            self.df, test_size=self.backtest_size, stratify=strata, random_state=42  # type: ignore
+            self.df,
+            test_size=self.backtest_size,  # type: ignore[arg-type]
+            stratify=strata,
+            random_state=42
         )
-        rel_test = self.test_size / (self.train_size + self.test_size)  # type: ignore
+        rel_test = self.test_size / (
+            self.train_size + self.test_size
+        )  # type: ignore[operator]
         strata_temp = strata.loc[temp_df.index]
         train, test = train_test_split(
-            temp_df, test_size=rel_test, stratify=strata_temp, random_state=42
+            temp_df,
+            test_size=rel_test,
+            stratify=strata_temp,
+            random_state=42
         )
         self.train_df, self.test_df, self.backtest_df = train, test, back
         return train, test, back
 
     def _time_split(self) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-        """
-        Split cronológico basado en una columna datetime.
-
-        Returns
-        -------
-        Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]
-            train, test y backtest.
-        """
+        """Divide cronológicamente según la columna temporal configurada."""
         df_sorted = self.df.sort_values(by=self.time_column)  # type: ignore
         if isinstance(self.train_size, float):
             n = len(df_sorted)
@@ -288,55 +218,41 @@ class RobustDataSplitter:
         else:
             cut1 = pd.to_datetime(self.train_size)
             cut2 = pd.to_datetime(self.test_size)
-            train = self.df[self.df[self.time_column] <= cut1]  # type: ignore
-            test = self.df[(self.df[self.time_column] > cut1) & (self.df[self.time_column] <= cut2)]
-            back = self.df[self.df[self.time_column] > cut2]
+            time_column = self.df[self.time_column]
+            train_mask = time_column <= cut1
+            between_cut = (time_column > cut1) & (time_column <= cut2)
+            train = self.df[train_mask]  # type: ignore[index]
+            test = self.df[between_cut]
+            back = self.df[time_column > cut2]
         self.train_df, self.test_df, self.backtest_df = train, test, back
         return train, test, back
 
     def _metric_split(self) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-        """
-        Split basado en cuantiles de una columna numérica.
-
-        Returns
-        -------
-        Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]
-            train, test y backtest.
-        """
+        """Genera splits basados en cuantiles de una métrica numérica."""
         series = self.df[self.metric_column]  # type: ignore
         q1 = series.quantile(self.train_size)  # type: ignore
         q2 = series.quantile(self.train_size + self.test_size)  # type: ignore
         train = self.df[series <= q1]
-        test = self.df[(series > q1) & (series <= q2)]
+        between_q = (series > q1) & (series <= q2)
+        test = self.df[between_q]
         back = self.df[series > q2]
         self.train_df, self.test_df, self.backtest_df = train, test, back
         return train, test, back
 
     def _is_large_dataset(self) -> bool:
-        """
-        Determina si el DataFrame excede el umbral de memoria.
-
-        Returns
-        -------
-        bool
-            True si el uso de memoria total supera memory_threshold.
-        """
+        """Indica si el dataset supera el umbral de memoria configurado."""
         total_mem = self.df.memory_usage(deep=True).sum()
         return total_mem > self.memory_threshold
 
-    def _memory_optimized_split(self) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-        """
-        Realiza splits por chunks en datasets grandes para optimizar memoria.
-
-        Returns
-        -------
-        Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]
-            train, test y backtest concatenados.
-        """
+    def _memory_optimized_split(
+        self,
+    ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+        """Ejecuta splits por chunks para datasets grandes."""
         chunks_tr, chunks_te, chunks_ba = [], [], []
         n = len(self.df)
         for start in range(0, n, self.chunk_size):
-            chunk = self.df.iloc[start:start + self.chunk_size]
+            stop = start + self.chunk_size
+            chunk = self.df.iloc[start:stop]
             splitter = RobustDataSplitter(
                 chunk,
                 split_method=self.split_method,
@@ -344,9 +260,9 @@ class RobustDataSplitter:
                 stratify_columns=self.stratify_columns,
                 time_column=self.time_column,
                 metric_column=self.metric_column,
-                train_size=self.train_size,  # type: ignore
-                test_size=self.test_size,    # type: ignore
-                backtest_size=self.backtest_size,  # type: ignore
+                train_size=self.train_size,  # type: ignore[arg-type]
+                test_size=self.test_size,  # type: ignore[arg-type]
+                backtest_size=self.backtest_size,  # type: ignore[arg-type]
                 memory_threshold=float('inf'),
                 chunk_size=self.chunk_size
             )
@@ -365,30 +281,16 @@ class RobustDataSplitter:
         actual: pd.Series,
         buckets: int = 10
     ) -> float:
-        """
-        Calcula el Population Stability Index (PSI) entre dos distribuciones.
-
-        Parameters
-        ----------
-        expected : pd.Series
-            Serie de referencia.
-        actual : pd.Series
-            Serie a comparar.
-        buckets : int
-            Número de bins.
-
-        Returns
-        -------
-        float
-            Valor de PSI.
-        """
+        """Calcula el Population Stability Index entre dos distribuciones."""
         percentiles = np.percentile(expected, np.linspace(0, 100, buckets + 1))
         exp_perc = np.histogram(expected, bins=percentiles)[0] / len(expected)
         act_perc = np.histogram(actual, bins=percentiles)[0] / len(actual)
         eps = 1e-8
         exp_perc = np.where(exp_perc == 0, eps, exp_perc)
         act_perc = np.where(act_perc == 0, eps, act_perc)
-        return float(np.sum((exp_perc - act_perc) * np.log(exp_perc / act_perc)))
+        ratio = np.divide(exp_perc, act_perc)
+        diff = exp_perc - act_perc
+        return float(np.sum(diff * np.log(ratio)))
 
     def _jensen_shannon(
         self,
@@ -396,44 +298,20 @@ class RobustDataSplitter:
         actual: pd.Series,
         buckets: int = 10
     ) -> float:
-        """
-        Calcula la divergencia de Jensen-Shannon entre dos distribuciones.
-
-        Parameters
-        ----------
-        expected : pd.Series
-        actual : pd.Series
-        buckets : int
-
-        Returns
-        -------
-        float
-            Divergencia JS.
-        """
+        """Calcula la divergencia de Jensen-Shannon."""
         cuts = np.percentile(expected, np.linspace(0, 100, buckets + 1))
         p = np.histogram(expected, bins=cuts)[0] / len(expected)
         q = np.histogram(actual, bins=cuts)[0] / len(actual)
         m = 0.5 * (p + q)
-        return float(0.5 * (entropy(p, m) + entropy(q, m)))
+        js_value = 0.5 * (entropy(p, m) + entropy(q, m))
+        return float(js_value)
 
     def _ks_test(
         self,
         expected: pd.Series,
         actual: pd.Series
     ) -> Tuple[float, float]:
-        """
-        Realiza la prueba de Kolmogorov-Smirnov entre dos series.
-
-        Parameters
-        ----------
-        expected : pd.Series
-        actual : pd.Series
-
-        Returns
-        -------
-        Tuple[float, float]
-            Estadístico KS y p-valor.
-        """
+        """Ejecuta una prueba KS entre las series entregadas."""
         stat, pvalue = ks_2samp(expected, actual)
         return float(stat), float(pvalue)
 
@@ -442,20 +320,10 @@ class RobustDataSplitter:
         expected: pd.Series,
         actual: pd.Series
     ) -> Tuple[float, float]:
-        """
-        Calcula diferencias de medias y varianzas entre dos series.
-
-        Parameters
-        ----------
-        expected : pd.Series
-        actual : pd.Series
-
-        Returns
-        -------
-        Tuple[float, float]
-            Diferencia de medias y diferencia de varianzas.
-        """
-        return float(expected.mean() - actual.mean()), float(expected.var() - actual.var())
+        """Obtiene diferencias de medias y varianzas entre dos series."""
+        mean_delta = float(expected.mean() - actual.mean())
+        var_delta = float(expected.var() - actual.var())
+        return mean_delta, var_delta
 
 # Ejemplo de uso:
 # if __name__ == '__main__':
