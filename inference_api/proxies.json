@@ -1,0 +1,11 @@
+{
+  "$schema": "http://json.schemastore.org/proxies",
+  "proxies": {
+    "fastapi": {
+      "matchCondition": {
+        "route": "/{*any}"
+      },
+      "backendUri": "http://127.0.0.1:8080/{any}"
+    }
+  }
+}
