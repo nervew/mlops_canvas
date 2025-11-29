@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-RG_NAME=${RG_NAME:-rg-ml-apis}
+RG_NAME=${RG_NAME:-rg-analitica-datamlops-dev-mlops}
 LOCATION=${LOCATION:-eastus}
-ACR_NAME=${ACR_NAME:-mlacr$RANDOM}
+ACR_NAME=${ACR_NAME:-mlopsanalitica}
 TRAIN_IMAGE_TAG=${TRAIN_IMAGE_TAG:-training-api:latest}
 PRED_IMAGE_TAG=${PRED_IMAGE_TAG:-inference-api:latest}
 
