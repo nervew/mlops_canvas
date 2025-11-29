@@ -7,7 +7,7 @@ ACR_NAME=${ACR_NAME:-mlopsanalitica}
 TRAIN_IMAGE_TAG=${TRAIN_IMAGE_TAG:-training-api:latest}
 PRED_IMAGE_TAG=${PRED_IMAGE_TAG:-inference-api:latest}
 
-az group create -n "$RG_NAME" -l "$LOCATION"
+#az group create -n "$RG_NAME" -l "$LOCATION"
 az acr create -n "$ACR_NAME" -g "$RG_NAME" --sku Basic
 az acr login -n "$ACR_NAME"
 LOGIN_SERVER=$(az acr show -n "$ACR_NAME" --query loginServer -o tsv)
