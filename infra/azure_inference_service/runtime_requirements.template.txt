@@ -1,0 +1,3 @@
+# Este archivo será generado por scripts/build_and_push_image.sh combinando
+# las dependencias del modelo publicadas en Blob Storage con las bases del servicio.
+# Copia este template a runtime_requirements.txt o deja que el script lo cree automáticamente.
