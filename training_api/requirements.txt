@@ -9,7 +9,6 @@ optuna==3.6.1
 joblib==1.4.2
 filelock==3.14.0
 azure-functions==1.21.3
-azure-functions-fastapi==1.7.0
 python-multipart==0.0.9
 xgboost==1.7.6
 lightgbm==4.3.0

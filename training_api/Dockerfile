@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/azure-functions/python:4-python3.11
+FROM mcr.microsoft.com/azure-functions/python:4-python3.10
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
