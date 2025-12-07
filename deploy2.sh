@@ -9,6 +9,8 @@ APP_NAME="mlopstestapp"
 IMAGE_NAME="hola-mundo-api"
 IMAGE_TAG="latest"
 
+USE_ACR_BUILD="${USE_ACR_BUILD:-false}"
+
 echo "=== Verificando dependencias ==="
 if ! command -v docker &> /dev/null; then
     echo "ERROR: Docker no está disponible en esta distribución WSL."
@@ -39,25 +41,70 @@ echo "=== Configurando Azure CLI ==="
 az account set --subscription "$SUBSCRIPTION_NAME"
 
 echo ""
-echo "=== Construyendo imagen Docker ==="
-docker build -t "${IMAGE_NAME}:${IMAGE_TAG}" .
-
-echo ""
-echo "=== Login a Azure Container Registry ==="
-az acr login --name "$ACR_NAME"
-
-echo ""
 echo "=== Obteniendo login server del ACR ==="
 ACR_LOGIN_SERVER=$(az acr show --name "$ACR_NAME" --resource-group "$RESOURCE_GROUP" --query loginServer -o tsv)
 echo "ACR Login Server: $ACR_LOGIN_SERVER"
 
-echo ""
-echo "=== Taggeando imagen para ACR ==="
-docker tag "${IMAGE_NAME}:${IMAGE_TAG}" "${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG}"
+if [ "$USE_ACR_BUILD" = "true" ]; then
+    echo ""
+    echo "=== Construyendo imagen directamente en ACR (evita problemas de conectividad) ==="
+    az acr build \
+        --registry "$ACR_NAME" \
+        --image "${IMAGE_NAME}:${IMAGE_TAG}" \
+        --file Dockerfile .
+    echo "✓ Imagen construida y pusheada exitosamente en ACR"
+else
+    echo ""
+    echo "=== Construyendo nueva imagen Docker localmente ==="
+    docker build -t "${IMAGE_NAME}:${IMAGE_TAG}" .
 
-echo ""
-echo "=== Pusheando imagen a ACR ==="
-docker push "${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG}"
+    echo ""
+    echo "=== Login a Azure Container Registry ==="
+    az acr login --name "$ACR_NAME"
+
+    echo ""
+    echo "=== Taggeando imagen para ACR ==="
+    docker tag "${IMAGE_NAME}:${IMAGE_TAG}" "${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG}"
+
+    echo ""
+    echo "=== Pusheando imagen a ACR (reemplazando imagen anterior) ==="
+    MAX_RETRIES=3
+    RETRY_COUNT=0
+    PUSH_SUCCESS=false
+
+    set +e
+    while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+        if docker push "${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG}" 2>&1; then
+            PUSH_SUCCESS=true
+            break
+        else
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+            if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+                echo ""
+                echo "⚠️  Push falló. Reintentando ($RETRY_COUNT/$MAX_RETRIES) en 5 segundos..."
+                sleep 5
+                echo "Reautenticando en ACR..."
+                az acr login --name "$ACR_NAME"
+            fi
+        fi
+    done
+    set -e
+
+    if [ "$PUSH_SUCCESS" = false ]; then
+        echo ""
+        echo "❌ ERROR: No se pudo pushear la imagen después de $MAX_RETRIES intentos."
+        echo ""
+        echo "💡 Solución: Usa construcción en ACR para evitar problemas de conectividad:"
+        echo "   USE_ACR_BUILD=true bash deploy2.sh"
+        echo ""
+        echo "O verifica:"
+        echo "1. Tu conexión a internet"
+        echo "2. Accesibilidad del ACR: az acr check-health --name $ACR_NAME"
+        exit 1
+    fi
+
+    echo "✓ Imagen pusheada exitosamente"
+fi
 
 echo ""
 echo "=== Obteniendo credenciales del ACR ==="
@@ -65,14 +112,14 @@ ACR_USERNAME=$(az acr credential show --name "$ACR_NAME" --query username -o tsv
 ACR_PASSWORD=$(az acr credential show --name "$ACR_NAME" --query "passwords[0].value" -o tsv)
 
 echo ""
-echo "=== Desplegando/Actualizando Container App ==="
+echo "=== Desplegando/Actualizando Container App con nueva imagen ==="
 if az containerapp show --name "$APP_NAME" --resource-group "$RESOURCE_GROUP" &>/dev/null; then
-    echo "Container App '$APP_NAME' existe. Actualizando..."
+    echo "Container App '$APP_NAME' existe. Actualizando con nueva imagen..."
     az containerapp update \
         --name "$APP_NAME" \
         --resource-group "$RESOURCE_GROUP" \
         --image "${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG}"
-    echo "Container App actualizada."
+    echo "Container App actualizada con nueva imagen."
 else
     echo "Creando Container App '$APP_NAME'..."
     az containerapp create \
@@ -101,4 +148,5 @@ echo ""
 echo "Prueba tu API con:"
 echo "  curl https://${APP_URL}/"
 echo "  curl https://${APP_URL}/health"
+echo "  curl -X POST https://${APP_URL}/edad -H 'Content-Type: application/json' -d '{\"fecha_nacimiento\": \"1990-01-15\"}'"
 

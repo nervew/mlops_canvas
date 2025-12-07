@@ -13,19 +13,36 @@ Infraestructura automatizada para desplegar una API "hola mundo" en Azure usando
 ## Dependencias
 
 - [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli)
-- [Docker](https://docs.docker.com/get-docker/)
+- [Docker Desktop](https://docs.docker.com/get-docker/) con integración WSL 2 activada
 - Permisos de Contributor en la suscripción "Gobierno de datos"
+
+### Configuración de Docker en WSL 2
+
+Si usas WSL 2, asegúrate de:
+
+1. Instalar Docker Desktop en Windows
+2. Abrir Docker Desktop > Settings > Resources > WSL Integration
+3. Activar la integración para tu distribución WSL
+4. Reiniciar la terminal o ejecutar `source ~/.bashrc`
+
+**Guía detallada**: Consulta `DOCKER_WSL_SETUP.md` para instrucciones paso a paso.
+
+**Verificación rápida**: Ejecuta `./check-docker.sh` para verificar que Docker esté configurado correctamente.
+
+El script `deploy.sh` verificará automáticamente que Docker esté disponible.
 
 ## Estructura del proyecto
 
 ```
 .
-├── app.py              # API FastAPI
-├── requirements.txt    # Dependencias Python
-├── Dockerfile          # Imagen Docker
-├── setup.sh           # Provisiona recursos en Azure
-├── deploy.sh          # Despliega la aplicación
-└── README.md          # Este archivo
+├── app.py                  # API FastAPI
+├── requirements.txt        # Dependencias Python
+├── Dockerfile              # Imagen Docker
+├── setup.sh               # Provisiona recursos en Azure
+├── deploy.sh              # Despliega la aplicación
+├── check-docker.sh        # Verifica configuración Docker
+├── DOCKER_WSL_SETUP.md    # Guía configuración Docker/WSL
+└── README.md              # Este archivo
 ```
 
 ## Uso
