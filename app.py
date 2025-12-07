@@ -1,9 +1,14 @@
 from fastapi import FastAPI
 
-app = FastAPI(title="Hola Mundo API")
+app = FastAPI()
 
 
 @app.get("/")
-def read_root() -> dict[str, str]:
-    """Return a friendly greeting."""
+def read_root():
     return {"message": "hola mundo"}
+
+
+@app.get("/health")
+def health_check():
+    return {"status": "healthy"}
+

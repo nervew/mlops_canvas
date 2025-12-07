@@ -1,57 +1,78 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/bash
+set -e
 
-PREFIX=${PREFIX:-"mlops"}
-RESOURCE_GROUP=${RESOURCE_GROUP:-"${PREFIX}-rg"}
-ACR_NAME=${ACR_NAME:-"${PREFIX}acr"}
-CONTAINERAPPS_ENV=${CONTAINERAPPS_ENV:-"${PREFIX}-env"}
-CONTAINERAPP_NAME=${CONTAINERAPP_NAME:-"${PREFIX}-api"}
-IMAGE_NAME=${IMAGE_NAME:-"${PREFIX}-api"}
-IMAGE_TAG=${IMAGE_TAG:-"latest"}
-CONTAINER_PORT=${CONTAINER_PORT:-8000}
-CPU=${CPU:-1.0}
-MEMORY=${MEMORY:-"2Gi"}
+SUBSCRIPTION_NAME="Gobierno de datos"
+RESOURCE_GROUP="GRPANALITICA"
+ACR_NAME="mlopstestacr"
+ENVIRONMENT_NAME="mlopstestenvironment"
+APP_NAME="mlopstestapp"
+IMAGE_NAME="hola-mundo-api"
+IMAGE_TAG="latest"
 
-command -v az >/dev/null 2>&1 || { echo "Azure CLI (az) es requerido" >&2; exit 1; }
-command -v docker >/dev/null 2>&1 || { echo "Docker es requerido para construir la imagen" >&2; exit 1; }
+echo "=== Configurando Azure CLI ==="
+az account set --subscription "$SUBSCRIPTION_NAME"
 
-ACR_LOGIN_SERVER=$(az acr show --name "$ACR_NAME" --resource-group "$RESOURCE_GROUP" --query loginServer -o tsv)
-ACR_USERNAME=$(az acr credential show --name "$ACR_NAME" --resource-group "$RESOURCE_GROUP" --query username -o tsv)
-ACR_PASSWORD=$(az acr credential show --name "$ACR_NAME" --resource-group "$RESOURCE_GROUP" --query "passwords[0].value" -o tsv)
-FULL_IMAGE="${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG}"
+echo ""
+echo "=== Construyendo imagen Docker ==="
+docker build -t "${IMAGE_NAME}:${IMAGE_TAG}" .
 
+echo ""
+echo "=== Login a Azure Container Registry ==="
 az acr login --name "$ACR_NAME"
 
-echo "Construyendo imagen $FULL_IMAGE..."
-docker build -t "$FULL_IMAGE" .
+echo ""
+echo "=== Obteniendo login server del ACR ==="
+ACR_LOGIN_SERVER=$(az acr show --name "$ACR_NAME" --resource-group "$RESOURCE_GROUP" --query loginServer -o tsv)
+echo "ACR Login Server: $ACR_LOGIN_SERVER"
 
-echo "Enviando imagen a ACR..."
-docker push "$FULL_IMAGE"
+echo ""
+echo "=== Taggeando imagen para ACR ==="
+docker tag "${IMAGE_NAME}:${IMAGE_TAG}" "${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG}"
 
-if az containerapp show --name "$CONTAINERAPP_NAME" --resource-group "$RESOURCE_GROUP" >/dev/null 2>&1; then
-  echo "Actualizando Container App existente..."
-  az containerapp update \
-    --name "$CONTAINERAPP_NAME" \
-    --resource-group "$RESOURCE_GROUP" \
-    --image "$FULL_IMAGE" \
-    --set-env-vars APP_ENV=production \
-    --output table
+echo ""
+echo "=== Pusheando imagen a ACR ==="
+docker push "${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG}"
+
+echo ""
+echo "=== Obteniendo credenciales del ACR ==="
+ACR_USERNAME=$(az acr credential show --name "$ACR_NAME" --query username -o tsv)
+ACR_PASSWORD=$(az acr credential show --name "$ACR_NAME" --query "passwords[0].value" -o tsv)
+
+echo ""
+echo "=== Desplegando/Actualizando Container App ==="
+if az containerapp show --name "$APP_NAME" --resource-group "$RESOURCE_GROUP" &>/dev/null; then
+    echo "Container App '$APP_NAME' existe. Actualizando..."
+    az containerapp update \
+        --name "$APP_NAME" \
+        --resource-group "$RESOURCE_GROUP" \
+        --image "${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG}"
+    echo "Container App actualizada."
 else
-  echo "Creando Container App..."
-  az containerapp create \
-    --name "$CONTAINERAPP_NAME" \
-    --resource-group "$RESOURCE_GROUP" \
-    --environment "$CONTAINERAPPS_ENV" \
-    --image "$FULL_IMAGE" \
-    --target-port "$CONTAINER_PORT" \
-    --ingress external \
-    --registry-server "$ACR_LOGIN_SERVER" \
-    --registry-username "$ACR_USERNAME" \
-    --registry-password "$ACR_PASSWORD" \
-    --cpu "$CPU" \
-    --memory "$MEMORY" \
-    --set-env-vars APP_ENV=production \
-    --output table
+    echo "Creando Container App '$APP_NAME'..."
+    az containerapp create \
+        --name "$APP_NAME" \
+        --resource-group "$RESOURCE_GROUP" \
+        --environment "$ENVIRONMENT_NAME" \
+        --image "${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG}" \
+        --target-port 8000 \
+        --ingress external \
+        --registry-server "$ACR_LOGIN_SERVER" \
+        --registry-username "$ACR_USERNAME" \
+        --registry-password "$ACR_PASSWORD" \
+        --cpu 0.25 \
+        --memory 0.5Gi
+    echo "Container App creada."
 fi
 
-echo "Despliegue completado. Imagen activa: $FULL_IMAGE"
+echo ""
+echo "=== Obteniendo URL de la aplicación ==="
+APP_URL=$(az containerapp show --name "$APP_NAME" --resource-group "$RESOURCE_GROUP" --query properties.configuration.ingress.fqdn -o tsv)
+
+echo ""
+echo "=== Despliegue completado exitosamente ==="
+echo "Aplicación disponible en: https://${APP_URL}"
+echo ""
+echo "Prueba tu API con:"
+echo "  curl https://${APP_URL}/"
+echo "  curl https://${APP_URL}/health"
+
