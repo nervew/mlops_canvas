@@ -98,3 +98,18 @@ Se recomienda usar ramas feature, PRs para integración y herramientas CI/CD par
 Para dudas o colaboración, contactar con el equipo de MLOps.
 
 ---
+
+## Pipeline de inferencia en Azure (dev y staging)
+
+El pipeline de inferencia descarga dependencias desde Blob Storage, construye una imagen de inferencia y despliega dos entornos (dev y staging) en Azure Container Apps.
+
+1. **Provisionar recursos**: `./scripts/install_resources.sh` crea (si no existen) el resource group `GRPANALITICA`, un Storage Account, ACR y un Container Apps Environment con prefijo `mlops`.
+2. **Entrenar y exportar**: usa `notebooks/flaml_forecasting.ipynb` para entrenar con FLAML y generar artefactos en `artifacts/<model_name>/` (modelo `.pickle`, `requirements.txt` y esquema vacío en `data/`).
+3. **Subir artefactos**: `MODEL_NAME=<model_name> STORAGE_ACCOUNT=<cuenta> ./scripts/upload_assets.sh artifacts/<model_name>` respeta la estructura `model_name/model|requirements|data`.
+4. **Construir y publicar**: `MODEL_NAME=<model_name> STORAGE_ACCOUNT=<cuenta> ACR_NAME=<acr> ./scripts/build_and_push.sh` descarga `requirements.txt` desde Blob, combina con `src/inference_api/base-requirements.txt`, construye la imagen con `docker/inference.Dockerfile` y la envía a ACR.
+5. **Desplegar dev y staging**: `ACR_NAME=<acr> IMAGE_NAME=<acr>.azurecr.io/<model>:<tag> STORAGE_ACCOUNT=<cuenta> ./scripts/deploy_container_app.sh` crea dos Container Apps (`mlops-dev-api` y `mlops-staging-api`) con variables de entorno para Blob Storage.
+
+### API de inferencia
+- Framework: FastAPI (`src/inference_api/app.py`).
+- Endpoint `/infer`: acepta JSON (`records`) o archivo (`csv`, `parquet`, `pickle`), parámetro `model_name` y ruta opcional `model_blob_path`. Descarga modelos `.pickle` u `.onnx` desde Blob Storage, ejecuta `predict` o `onnxruntime` y retorna predicciones.
+- Endpoint `/health`: verificación básica para Container Apps.
