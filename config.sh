@@ -1,0 +1,20 @@
+#!/bin/bash
+
+SUBSCRIPTION_NAME="${SUBSCRIPTION_NAME:-Gobierno de datos}"
+RESOURCE_GROUP="${RESOURCE_GROUP:-GRPANALITICA}"
+LOCATION="${LOCATION:-eastus}"
+
+ACR_NAME="${ACR_NAME:-mlopstestacr}"
+ACR_SKU="${ACR_SKU:-Basic}"
+
+ENVIRONMENT_NAME="${ENVIRONMENT_NAME:-mlopstestenvironment}"
+APP_NAME="${APP_NAME:-mlopstestapp}"
+
+IMAGE_NAME="${IMAGE_NAME:-mlopstest-api}"
+IMAGE_TAG="${IMAGE_TAG:-latest}"
+
+TARGET_PORT="${TARGET_PORT:-8000}"
+CPU="${CPU:-0.25}"
+MEMORY="${MEMORY:-0.5Gi}"
+INGRESS="${INGRESS:-external}"
+

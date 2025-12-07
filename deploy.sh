@@ -1,13 +1,8 @@
 #!/bin/bash
 set -e
 
-SUBSCRIPTION_NAME="Gobierno de datos"
-RESOURCE_GROUP="GRPANALITICA"
-ACR_NAME="mlopstestacr"
-ENVIRONMENT_NAME="mlopstestenvironment"
-APP_NAME="mlopstestapp"
-IMAGE_NAME="mlopstest-api"
-IMAGE_TAG="latest"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/config.sh"
 
 echo "=== Verificando dependencias ==="
 if ! command -v docker &> /dev/null; then
@@ -80,13 +75,13 @@ else
         --resource-group "$RESOURCE_GROUP" \
         --environment "$ENVIRONMENT_NAME" \
         --image "${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG}" \
-        --target-port 8000 \
-        --ingress external \
+        --target-port "$TARGET_PORT" \
+        --ingress "$INGRESS" \
         --registry-server "$ACR_LOGIN_SERVER" \
         --registry-username "$ACR_USERNAME" \
         --registry-password "$ACR_PASSWORD" \
-        --cpu 0.25 \
-        --memory 0.5Gi
+        --cpu "$CPU" \
+        --memory "$MEMORY"
     echo "Container App creada."
 fi
 

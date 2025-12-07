@@ -1,11 +1,8 @@
 #!/bin/bash
 set -e
 
-SUBSCRIPTION_NAME="Gobierno de datos"
-RESOURCE_GROUP="GRPANALITICA"
-LOCATION="eastus"
-ACR_NAME="mlopstestacr"
-ENVIRONMENT_NAME="mlopstestenvironment"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/config.sh"
 
 echo "=== Configurando Azure CLI ==="
 az account set --subscription "$SUBSCRIPTION_NAME"
@@ -30,7 +27,7 @@ else
     az acr create \
         --resource-group "$RESOURCE_GROUP" \
         --name "$ACR_NAME" \
-        --sku Basic \
+        --sku "$ACR_SKU" \
         --admin-enabled true
     echo "ACR creado."
 fi

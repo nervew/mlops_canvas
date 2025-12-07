@@ -9,20 +9,20 @@ import importlib.util
 from datetime import datetime
 import os
 import functools
+from config import (
+    API_TITLE, API_VERSION, MODEL_PATH, DATA_PATH, REQUIREMENTS_PATH,
+    THRESHOLD, MODEL_VERSION, MODEL_NAME, OUTPUT_PREDICT_PROBA_KEY,
+    OUTPUT_PREDICT_KEY, OUTPUT_THRESHOLD_KEY, ERROR_PREDICT_PROBA_VALUE,
+    ERROR_PREDICT_VALUE, ERROR_THRESHOLD_VALUE, SHOW_THRESHOLD,
+    ENVIRONMENT, BUILD_ID
+)
 
-app = FastAPI(title="ML Inference API", version="1.0.0")
-
-MODEL_PATH = Path("artifacts/model.pkl")
-DATA_PATH = Path("artifacts/data.parquet")
-REQUIREMENTS_PATH = Path("artifacts/requirements.txt")
+app = FastAPI(title=API_TITLE, version=API_VERSION)
 
 model = None
 input_columns = None
 output_type = None
 PredictRequest = None
-THRESHOLD = 0.65
-MODEL_VERSION = "1.0.0"
-MODEL_NAME = "gompertz-logreg-v1"
 
 
 def detect_framework() -> str:
@@ -178,8 +178,8 @@ def get_model_metadata() -> Dict[str, Any]:
             except Exception:
                 pass
     
-    metadata["entorno"] = os.getenv("ENVIRONMENT", "production")
-    metadata["build_id"] = os.getenv("BUILD_ID", os.getenv("BUILD_BUILDID", "unknown"))
+    metadata["entorno"] = ENVIRONMENT
+    metadata["build_id"] = BUILD_ID
     
     return metadata
 
@@ -234,9 +234,9 @@ def safe_api_call(func: Callable, input_data: Optional[Dict[str, Any]] = None, *
     Función de soporte que ejecuta una llamada a API con manejo de errores.
     
     Si ocurre un error, retorna un objeto con:
-    - proba_death: 1 (valor por defecto en error)
-    - prediction: 1 (valor por defecto en error)
-    - threshold: THRESHOLD actual
+    - predict_proba: valor por defecto en error (configurable)
+    - predict: valor por defecto en error (configurable)
+    - threshold: valor por defecto en error (si SHOW_THRESHOLD es true)
     - input: datos de entrada recibidos (si están disponibles)
     - metadata: contiene error: 1, error_message, error_type, y información del modelo
     
@@ -269,9 +269,8 @@ def safe_api_call(func: Callable, input_data: Optional[Dict[str, Any]] = None, *
         
     except Exception as e:
         error_response = {
-            "proba_death": 1.0,
-            "prediction": 1,
-            "threshold": 0.0,
+            OUTPUT_PREDICT_PROBA_KEY: ERROR_PREDICT_PROBA_VALUE,
+            OUTPUT_PREDICT_KEY: ERROR_PREDICT_VALUE,
             "metadata": {
                 "error": 1,
                 "error_message": str(e),
@@ -279,6 +278,9 @@ def safe_api_call(func: Callable, input_data: Optional[Dict[str, Any]] = None, *
                 **get_model_metadata()
             }
         }
+        
+        if SHOW_THRESHOLD:
+            error_response[OUTPUT_THRESHOLD_KEY] = ERROR_THRESHOLD_VALUE
         
         if input_data is not None:
             error_response["input"] = input_data
@@ -348,40 +350,44 @@ def _execute_prediction(input_data: Dict[str, Any]) -> Dict[str, Any]:
     df_input = pd.DataFrame([input_data])
     df_input = df_input[input_columns]
     
-    proba_death = None
-    prediction_binary = None
+    predict_proba_value = None
+    predict_value = None
     
     try:
         proba = model.predict_proba(df_input)
         if isinstance(proba, np.ndarray):
             if proba.ndim == 2:
-                proba_death = float(proba[0][1])
+                predict_proba_value = float(proba[0][1])
             else:
-                proba_death = float(proba[0])
+                predict_proba_value = float(proba[0])
         else:
-            proba_death = float(proba)
+            predict_proba_value = float(proba)
     except (AttributeError, Exception):
         pass
     
-    if proba_death is not None:
-        prediction_binary = 1 if proba_death >= THRESHOLD else 0
+    if predict_proba_value is not None:
+        predict_value = 1 if predict_proba_value >= THRESHOLD else 0
     else:
         try:
             prediction_raw = model.predict(df_input)
             if isinstance(prediction_raw, np.ndarray):
-                prediction_binary = int(prediction_raw[0])
+                predict_value = int(prediction_raw[0])
             else:
-                prediction_binary = int(prediction_raw)
-            proba_death = 1.0 if prediction_binary == 1 else 0.0
+                predict_value = int(prediction_raw)
+            predict_proba_value = 1.0 if predict_value == 1 else 0.0
         except Exception:
             raise ValueError("El modelo no soporta predict_proba ni predict")
     
-    return {
-        "proba_death": proba_death,
-        "prediction": prediction_binary,
-        "threshold": THRESHOLD,
+    result = {
+        OUTPUT_PREDICT_PROBA_KEY: predict_proba_value,
+        OUTPUT_PREDICT_KEY: predict_value,
         "input": input_data
     }
+    
+    if SHOW_THRESHOLD:
+        result[OUTPUT_THRESHOLD_KEY] = THRESHOLD
+    
+    return result
 
 
 @app.post("/predict")
@@ -391,9 +397,8 @@ def predict(request: Dict[str, Any]):
     
     if model is None:
         error_response = {
-            "proba_death": 1.0,
-            "prediction": 1,
-            "threshold": 0.0,
+            OUTPUT_PREDICT_PROBA_KEY: ERROR_PREDICT_PROBA_VALUE,
+            OUTPUT_PREDICT_KEY: ERROR_PREDICT_VALUE,
             "input": request,
             "metadata": {
                 "error": 1,
@@ -402,13 +407,14 @@ def predict(request: Dict[str, Any]):
                 **get_model_metadata()
             }
         }
+        if SHOW_THRESHOLD:
+            error_response[OUTPUT_THRESHOLD_KEY] = ERROR_THRESHOLD_VALUE
         raise HTTPException(status_code=503, detail=error_response)
     
     if input_columns is None:
         error_response = {
-            "proba_death": 1.0,
-            "prediction": 1,
-            "threshold": 0.0,
+            OUTPUT_PREDICT_PROBA_KEY: ERROR_PREDICT_PROBA_VALUE,
+            OUTPUT_PREDICT_KEY: ERROR_PREDICT_VALUE,
             "input": request,
             "metadata": {
                 "error": 1,
@@ -417,15 +423,16 @@ def predict(request: Dict[str, Any]):
                 **get_model_metadata()
             }
         }
+        if SHOW_THRESHOLD:
+            error_response[OUTPUT_THRESHOLD_KEY] = ERROR_THRESHOLD_VALUE
         raise HTTPException(status_code=500, detail=error_response)
     
     try:
         for col in input_columns:
             if col not in request:
                 error_response = {
-                    "proba_death": 1.0,
-                    "prediction": 1,
-                    "threshold": 0.0,
+                    OUTPUT_PREDICT_PROBA_KEY: ERROR_PREDICT_PROBA_VALUE,
+                    OUTPUT_PREDICT_KEY: ERROR_PREDICT_VALUE,
                     "input": request,
                     "metadata": {
                         "error": 1,
@@ -434,6 +441,8 @@ def predict(request: Dict[str, Any]):
                         **get_model_metadata()
                     }
                 }
+                if SHOW_THRESHOLD:
+                    error_response[OUTPUT_THRESHOLD_KEY] = ERROR_THRESHOLD_VALUE
                 raise HTTPException(status_code=422, detail=error_response)
             input_data[col] = request[col]
         
@@ -450,9 +459,8 @@ def predict(request: Dict[str, Any]):
         raise
     except Exception as e:
         error_response = {
-            "proba_death": 1.0,
-            "prediction": 1,
-            "threshold": 0.0,
+            OUTPUT_PREDICT_PROBA_KEY: ERROR_PREDICT_PROBA_VALUE,
+            OUTPUT_PREDICT_KEY: ERROR_PREDICT_VALUE,
             "input": input_data if input_data else request,
             "metadata": {
                 "error": 1,
@@ -461,4 +469,6 @@ def predict(request: Dict[str, Any]):
                 **get_model_metadata()
             }
         }
+        if SHOW_THRESHOLD:
+            error_response[OUTPUT_THRESHOLD_KEY] = ERROR_THRESHOLD_VALUE
         raise HTTPException(status_code=500, detail=error_response)
