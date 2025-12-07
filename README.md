@@ -81,8 +81,42 @@ Ejemplo de clases clave:
 6. **Inferencia y Validación Post-Despliegue**  
    Realizar predicciones y validar la calidad de inferencias.
 
-7. **Monitoreo Continuo y Reentrenamiento**  
+7. **Monitoreo Continuo y Reentrenamiento**
    Validar modelo en producción, detectar drift y decidir reentrenamiento.
+
+---
+
+## Despliegue de la API de prueba en Azure Container Apps
+
+El repositorio incluye una API mínima (`api/main.py`) que responde "hola mundo" y scripts automatizados para construir la imagen, publicarla en Azure Container Registry (ACR) y desplegarla en Azure Container Apps. Todos los recursos usan el prefijo `mlopstest` y se crean en el grupo de recursos `GRPANALITICA` dentro de la suscripción `Gobierno de datos`.
+
+1. **Autenticación y preparación local**
+   ```bash
+   az login
+   az account set --subscription "Gobierno de datos"
+   ```
+
+2. **Construir y publicar la imagen en ACR**
+   ```bash
+   python scripts/build_and_push.py --image-version v1
+   ```
+   - Usa el `Dockerfile` en la raíz para empaquetar la API FastAPI.
+   - Etiqueta la imagen como `mlopstestacr.azurecr.io/mlopstest-api:v1` y la publica en ACR.
+
+3. **Provisionar los recursos de Azure (ACR, Log Analytics, Container Apps Environment y Container App)**
+   ```bash
+   ./scripts/provision_resources.sh
+   ```
+   - Utiliza la plantilla Bicep `infra/provision.bicep` para crear o actualizar los recursos requeridos.
+
+4. **Actualizar el contenedor desplegado con una nueva imagen**
+   ```bash
+   ./scripts/deploy_container_app.sh
+   ```
+   - Apunta la Container App `mlopstest-api` a la imagen publicada en ACR.
+   - Para consultar la URL pública: `az containerapp show --name mlopstest-api --resource-group GRPANALITICA --query properties.configuration.ingress.fqdn -o tsv`.
+
+Variables de entorno opcionales para personalizar: `SUBSCRIPTION`, `RESOURCE_GROUP`, `LOCATION`, `PREFIX`, `CONTAINER_IMAGE` e `IMAGE`.
 
 ---
 
