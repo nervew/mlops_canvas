@@ -11,7 +11,9 @@ dist/
 build/
 .venv/
 venv/
+myenv/
 ENV/
 .env
 .DS_Store
+
 
