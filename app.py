@@ -3,7 +3,8 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 from typing import Dict, Any, List, Union, Callable, Optional
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, create_model
 import importlib.util
 from datetime import datetime
@@ -18,6 +19,21 @@ from config import (
 )
 
 app = FastAPI(title=API_TITLE, version=API_VERSION)
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """Handler personalizado que devuelve el detail directamente sin envolver en 'detail'"""
+    if isinstance(exc.detail, dict):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=exc.detail
+        )
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail}
+    )
+
 
 model = None
 input_columns = None
