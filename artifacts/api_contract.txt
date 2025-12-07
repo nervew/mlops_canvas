@@ -1,0 +1,202 @@
+Contrato de API – Modelo Gompertz–Makeham (Regresión Logística)
+
+Versión: 1.0.0
+Servicio: API de predicción de mortalidad anual
+Modelo: gompertz_logreg_pipeline.pkl (Pipeline de scikit-learn con preprocesamiento + Regresión Logística)
+
+1. Descripción general
+----------------------
+Esta API expone un modelo de Machine Learning que estima la probabilidad de muerte en un año para un individuo, utilizando una versión simplificada del modelo de Gompertz–Makeham.
+
+- Input: características individuales y de contexto (edad, fragilidad, tabaquismo, etc.).
+- Output:
+  - probabilidad de muerte en el año (proba_death),
+  - clasificación binaria (prediction) según un umbral fijo (threshold).
+
+La API está pensada para uso interno de análisis y experimentación, no para toma de decisiones clínicas reales.
+
+2. Endpoints
+------------
+
+2.1. GET /health
+Descripción:
+Verifica que el servicio está disponible y que el modelo se ha cargado correctamente.
+
+Request:
+- Método: GET
+- URL: /health
+- Headers: ninguno especial
+
+Response 200 – OK (ejemplo):
+{
+  "status": "ok",
+  "model_loaded": true
+}
+
+2.2. POST /predict
+Descripción:
+Calcula la probabilidad de muerte en el año (proba_death) y devuelve una predicción binaria (prediction) basada en un umbral (threshold, por defecto 0.5).
+
+Request:
+- Método: POST
+- URL: /predict
+- Headers:
+  - Content-Type: application/json
+
+Body (JSON de ejemplo):
+{
+  "age": 70,
+  "frailty": 1.3,
+  "A_t": 0.0005,
+  "smoker": 1,
+  "active_lifestyle": 0,
+  "crisis_active": 0
+}
+
+Definición de campos de entrada:
+
+- age (number, años, obligatorio, rango [0, 120]):
+  Edad de la persona en años en el momento de la predicción.
+
+- frailty (number, adimensional, obligatorio, rango (0, +∞), típicamente 0.3–3):
+  Índice de fragilidad biológica (>1 = más frágil, <1 = más robusto).
+
+- A_t (number, 1/año, obligatorio, rango [0, 0.01]):
+  Riesgo externo efectivo del entorno ese año (accidentes, violencia, crisis, etc.).
+
+- smoker (integer, {0, 1}, obligatorio):
+  Estado de tabaquismo: 1 = fumador, 0 = no fumador.
+
+- active_lifestyle (integer, {0, 1}, obligatorio):
+  Estilo de vida activo: 1 = físicamente activo, 0 = sedentario.
+
+- crisis_active (integer, {0, 1}, obligatorio):
+  Indica si la persona vive un periodo de crisis (guerra, pandemia, etc.) en ese momento.
+
+Nota: La API no realiza validaciones complejas de negocio por defecto. Es responsabilidad del consumidor garantizar que los valores estén dentro de rangos razonables.
+
+3. Respuestas del endpoint /predict
+-----------------------------------
+
+3.1. Respuesta 200 – OK
+
+Ejemplo de respuesta:
+{
+  "proba_death": 0.0231,
+  "prediction": 0,
+  "threshold": 0.5,
+  "input": {
+    "age": 70,
+    "frailty": 1.3,
+    "A_t": 0.0005,
+    "smoker": 1,
+    "active_lifestyle": 0,
+    "crisis_active": 0
+  }
+}
+
+Definición de campos de salida:
+
+- proba_death (number):
+  Probabilidad estimada de muerte en el año (clase 1 del modelo), valor entre 0 y 1.
+
+- prediction (integer):
+  Clasificación binaria:
+  - 1 = “alto riesgo” (≥ threshold),
+  - 0 = “bajo riesgo” (< threshold).
+
+- threshold (number):
+  Umbral de decisión utilizado para convertir la probabilidad en clase (por defecto 0.5).
+
+- input (object):
+  Eco de los datos de entrada utilizados para generar la predicción.
+
+Interpretación de negocio:
+- proba_death = 0.0231 → ~2.31% de probabilidad de muerte en el año según el modelo.
+- prediction = 1 → el modelo considera que el individuo está en alto riesgo, según el umbral.
+- prediction = 0 → considera bajo riesgo, aunque la probabilidad nunca es exactamente 0.
+
+3.2. Errores esperados
+----------------------
+
+422 – Unprocessable Entity (error de validación):
+Se devuelve cuando el cuerpo del request no cumple el esquema (por ejemplo, falta un campo obligatorio o tiene el tipo incorrecto).
+
+Ejemplo:
+{
+  "detail": [
+    {
+      "loc": ["body", "age"],
+      "msg": "field required",
+      "type": "value_error.missing"
+    }
+  ]
+}
+
+500 – Internal Server Error:
+Se devolvería si ocurre un error inesperado (por ejemplo, el modelo no se puede cargar).
+
+4. Consideraciones del modelo
+-----------------------------
+
+4.1. Versión del modelo
+- Nombre lógico: gompertz-logreg-v1
+- Artefacto serializado: gompertz_logreg_pipeline.pkl
+- Tecnología: scikit-learn (Pipeline con ColumnTransformer + LogisticRegression)
+
+4.2. Umbral (threshold)
+- Valor actual: 0.5
+- Regla de decisión:
+  - Si proba_death >= 0.5 ⇒ prediction = 1
+  - En otro caso ⇒ prediction = 0
+
+Cualquier ajuste futuro del umbral debe documentarse y, si afecta a la semántica de negocio, debe actualizarse este contrato.
+
+5. Ejemplos de uso
+------------------
+
+5.1. Petición de ejemplo (cURL)
+curl -X POST "http://localhost:8000/predict"   -H "Content-Type: application/json"   -d '{
+        "age": 70,
+        "frailty": 1.3,
+        "A_t": 0.0005,
+        "smoker": 1,
+        "active_lifestyle": 0,
+        "crisis_active": 0
+      }'
+
+5.2. Petición de ejemplo (Python requests)
+import requests
+
+url = "http://localhost:8000/predict"
+payload = {
+    "age": 70,
+    "frailty": 1.3,
+    "A_t": 0.0005,
+    "smoker": 1,
+    "active_lifestyle": 0,
+    "crisis_active": 0
+}
+
+response = requests.post(url, json=payload)
+print(response.status_code)
+print(response.json())
+
+6. Limitaciones y advertencias
+------------------------------
+- El modelo se ha entrenado sobre datos sintéticos basados en un modelo teórico (Gompertz–Makeham).
+- No debe usarse para decisiones médicas reales ni para decisiones críticas sobre personas.
+- La API no realiza verificaciones de plausibilidad profundas sobre las entradas; se asume que los sistemas upstream validan rangos y consistencia (por ejemplo, no enviar age = -5).
+
+7. Resumen
+----------
+Esta API proporciona:
+- Un endpoint de salud: GET /health.
+- Un endpoint de predicción: POST /predict, con un contrato claro de entrada y salida.
+
+Cualquier cambio en:
+- versión del modelo,
+- listado de features de entrada,
+- umbral de decisión,
+
+deberá ir acompañado de una actualización de este contrato y del número de versión del servicio.

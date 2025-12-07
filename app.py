@@ -1,41 +1,275 @@
-from datetime import date
+import pickle
+import pandas as pd
+import numpy as np
+from pathlib import Path
+from typing import Dict, Any, List, Union
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, create_model
+import importlib.util
 
-app = FastAPI()
+app = FastAPI(title="ML Inference API", version="1.0.0")
+
+MODEL_PATH = Path("artifacts/model.pkl")
+DATA_PATH = Path("artifacts/data.parquet")
+REQUIREMENTS_PATH = Path("artifacts/requirements.txt")
+
+model = None
+input_columns = None
+output_type = None
+PredictRequest = None
+THRESHOLD = 0.65
+
+
+def detect_framework() -> str:
+    """Detecta el framework de ML desde requirements.txt"""
+    if not REQUIREMENTS_PATH.exists():
+        raise FileNotFoundError(f"No se encuentra {REQUIREMENTS_PATH}")
+    
+    with open(REQUIREMENTS_PATH, 'r') as f:
+        requirements = f.read().lower()
+    
+    if 'scikit-learn' in requirements or 'sklearn' in requirements:
+        return 'sklearn'
+    elif 'xgboost' in requirements:
+        return 'xgboost'
+    elif 'lightgbm' in requirements:
+        return 'lightgbm'
+    elif 'catboost' in requirements:
+        return 'catboost'
+    elif 'tensorflow' in requirements:
+        return 'tensorflow'
+    elif 'torch' in requirements or 'pytorch' in requirements:
+        return 'pytorch'
+    else:
+        return 'unknown'
+
+
+def load_model():
+    """Carga el modelo desde artifacts/model.pkl"""
+    global model
+    
+    if not MODEL_PATH.exists():
+        raise FileNotFoundError(f"No se encuentra {MODEL_PATH}")
+    
+    try:
+        import joblib
+        model = joblib.load(MODEL_PATH)
+    except (ImportError, Exception):
+        try:
+            with open(MODEL_PATH, 'rb') as f:
+                model = pickle.load(f)
+        except (pickle.UnpicklingError, ValueError, TypeError):
+            try:
+                with open(MODEL_PATH, 'rb') as f:
+                    unpickler = pickle.Unpickler(f)
+                    unpickler.encoding = 'latin1'
+                    model = unpickler.load()
+            except Exception as e:
+                raise ValueError(f"Error al cargar el modelo: {str(e)}. El archivo puede estar corrupto o ser incompatible.")
+    
+    return model
+
+
+def infer_input_columns() -> List[str]:
+    """Infiere las columnas de entrada desde el modelo y data.parquet"""
+    global input_columns
+    
+    if not DATA_PATH.exists():
+        raise FileNotFoundError(f"No se encuentra {DATA_PATH}")
+    
+    df = pd.read_parquet(DATA_PATH)
+    
+    if hasattr(model, 'feature_names_in_'):
+        input_columns = list(model.feature_names_in_)
+    elif hasattr(model, 'get_booster'):
+        booster = model.get_booster()
+        if hasattr(booster, 'feature_names'):
+            input_columns = booster.feature_names
+        else:
+            input_columns = [f'feature_{i}' for i in range(len(df.columns))]
+    elif hasattr(model, 'feature_importances_'):
+        if hasattr(model, 'feature_names_in_'):
+            input_columns = list(model.feature_names_in_)
+        else:
+            input_columns = list(df.columns)
+    else:
+        input_columns = list(df.columns)
+    
+    return input_columns
+
+
+def infer_output_type() -> str:
+    """Infiere el tipo de salida del modelo"""
+    global output_type
+    
+    if not DATA_PATH.exists():
+        raise FileNotFoundError(f"No se encuentra {DATA_PATH}")
+    
+    df = pd.read_parquet(DATA_PATH)
+    
+    sample_data = df[input_columns].iloc[:1] if input_columns else df.iloc[:1]
+    
+    inferred_type = 'unknown'
+    
+    try:
+        prediction = model.predict(sample_data)
+        
+        if isinstance(prediction, np.ndarray):
+            if prediction.ndim == 1:
+                if len(prediction) == 1:
+                    inferred_type = 'single_value'
+                else:
+                    inferred_type = 'array'
+            else:
+                inferred_type = 'matrix'
+        elif isinstance(prediction, (int, float, np.number)):
+            inferred_type = 'single_value'
+        else:
+            inferred_type = 'unknown'
+    except Exception:
+        try:
+            prediction = model.predict_proba(sample_data)
+            inferred_type = 'probabilities'
+        except Exception:
+            inferred_type = 'unknown'
+    
+    output_type = inferred_type
+    return output_type
+
+
+def create_predict_request_model():
+    """Crea dinámicamente el modelo Pydantic para la request"""
+    global PredictRequest
+    
+    if input_columns is None:
+        raise ValueError("Las columnas de entrada no han sido inferidas")
+    
+    field_definitions = {}
+    for col in input_columns:
+        field_definitions[col] = (float, Field(..., description=f"Valor para {col}"))
+    
+    PredictRequest = create_model('PredictRequest', **field_definitions)
+    return PredictRequest
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Inicializa el modelo y configura la API al arrancar"""
+    global model, input_columns, output_type, PredictRequest
+    
+    try:
+        framework = detect_framework()
+        print(f"Framework detectado: {framework}")
+        
+        model = load_model()
+        print(f"Modelo cargado desde {MODEL_PATH}")
+        
+        input_columns = infer_input_columns()
+        print(f"Columnas de entrada inferidas: {input_columns}")
+        
+        output_type = infer_output_type()
+        print(f"Tipo de salida inferido: {output_type}")
+        
+        PredictRequest = create_predict_request_model()
+        print("Modelo de request creado dinámicamente")
+        
+    except Exception as e:
+        print(f"Error durante la inicialización: {str(e)}")
+        raise
 
 
 @app.get("/")
 def read_root():
-    return {"message": "hola mundo"}
+    return {
+        "message": "ML Inference API",
+        "model_loaded": model is not None,
+        "input_columns": input_columns,
+        "output_type": output_type
+    }
 
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy"}
+    return {
+        "status": "ok",
+        "model_loaded": model is not None
+    }
 
 
-class FechaNacimiento(BaseModel):
-    fecha_nacimiento: str
+@app.get("/model-info")
+def get_model_info():
+    """Retorna información sobre el modelo"""
+    if model is None:
+        raise HTTPException(status_code=503, detail="Modelo no cargado")
+    
+    return {
+        "input_columns": input_columns,
+        "output_type": output_type,
+        "model_type": type(model).__name__
+    }
 
-    @field_validator("fecha_nacimiento")
-    @classmethod
-    def validar_formato(cls, v):
+
+@app.post("/predict")
+def predict(request: Dict[str, Any]):
+    """Endpoint de predicción que acepta JSON con las entradas del modelo"""
+    if model is None:
+        raise HTTPException(status_code=503, detail="Modelo no cargado")
+    
+    if input_columns is None:
+        raise HTTPException(status_code=500, detail="Columnas de entrada no definidas")
+    
+    try:
+        input_data = {}
+        for col in input_columns:
+            if col not in request:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Falta la columna requerida: {col}"
+                )
+            input_data[col] = request[col]
+        
+        df_input = pd.DataFrame([input_data])
+        df_input = df_input[input_columns]
+        
+        proba_death = None
+        prediction_binary = None
+        
         try:
-            fecha = date.fromisoformat(v)
-            if fecha > date.today():
-                raise ValueError("La fecha de nacimiento no puede ser futura")
-            return v
-        except ValueError as e:
-            if "invalid date format" in str(e).lower() or "invalid isoformat" in str(e).lower():
-                raise ValueError("Formato de fecha inválido. Use YYYY-MM-DD")
-            raise
-
-
-@app.post("/edad")
-def calcular_edad(fecha: FechaNacimiento):
-    fecha_nac = date.fromisoformat(fecha.fecha_nacimiento)
-    hoy = date.today()
-    edad = hoy.year - fecha_nac.year - ((hoy.month, hoy.day) < (fecha_nac.month, fecha_nac.day))
-    return {"edad": edad}
-
+            proba = model.predict_proba(df_input)
+            if isinstance(proba, np.ndarray):
+                if proba.ndim == 2:
+                    proba_death = float(proba[0][1])
+                else:
+                    proba_death = float(proba[0])
+            else:
+                proba_death = float(proba)
+        except (AttributeError, Exception):
+            pass
+        
+        if proba_death is not None:
+            prediction_binary = 1 if proba_death >= THRESHOLD else 0
+        else:
+            try:
+                prediction_raw = model.predict(df_input)
+                if isinstance(prediction_raw, np.ndarray):
+                    prediction_binary = int(prediction_raw[0])
+                else:
+                    prediction_binary = int(prediction_raw)
+                proba_death = 1.0 if prediction_binary == 1 else 0.0
+            except Exception:
+                raise HTTPException(
+                    status_code=500,
+                    detail="El modelo no soporta predict_proba ni predict"
+                )
+        
+        return {
+            "proba_death": proba_death,
+            "prediction": prediction_binary,
+            "threshold": THRESHOLD,
+            "input": input_data
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error en la predicción: {str(e)}")

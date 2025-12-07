@@ -1,0 +1,73 @@
+# Entornos virtuales
+myenv/
+venv/
+.venv/
+ENV/
+env/
+.ENV/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Sistema
+.DS_Store
+Thumbs.db
+*.log
+
+# Variables de entorno
+.env
+.env.local
+.env.*.local
+
+# MLOps / Modelos
+*.pkl
+*.h5
+*.hdf5
+*.joblib
+*.model
+models/
+checkpoints/
+
+# Datos grandes
+*.parquet
+*.csv
+data/
+datasets/
+*.db
+*.sqlite
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Azure ML
+.azureml/
+mlruns/
+wandb/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Temporal
+*.tmp
+*.bak
+*.swp
+
