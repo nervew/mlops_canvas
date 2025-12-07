@@ -60,18 +60,13 @@ resource "azurerm_container_app" "app" {
   revision_mode = "Single"
 
   identity {
-    type = "UserAssigned"
-    user_assigned_identities = {
-      (azurerm_user_assigned_identity.acr_identity.id) = {}
-    }
+    type         = "UserAssigned"
+    identity_ids = [azurerm_user_assigned_identity.acr_identity.id]
   }
 
   registry {
     server = azurerm_container_registry.acr.login_server
-    identity {
-      type        = "UserAssigned"
-      resource_id = azurerm_user_assigned_identity.acr_identity.id
-    }
+    identity = azurerm_user_assigned_identity.acr_identity.id
   }
 
   ingress {
