@@ -34,6 +34,19 @@ echo "=== Configurando Azure CLI ==="
 az account set --subscription "$SUBSCRIPTION_NAME"
 
 echo ""
+echo "=== Verificando/Creando Container App Environment ==="
+if az containerapp env show --name "$ENVIRONMENT_NAME" --resource-group "$RESOURCE_GROUP" &>/dev/null; then
+    echo "Container App Environment '$ENVIRONMENT_NAME' existe ✓"
+else
+    echo "Container App Environment '$ENVIRONMENT_NAME' no existe. Creando..."
+    az containerapp env create \
+        --name "$ENVIRONMENT_NAME" \
+        --resource-group "$RESOURCE_GROUP" \
+        --location "$LOCATION"
+    echo "Container App Environment creado ✓"
+fi
+
+echo ""
 echo "=== Construyendo imagen Docker ==="
 docker build -t "${IMAGE_NAME}:${IMAGE_TAG}" .
 

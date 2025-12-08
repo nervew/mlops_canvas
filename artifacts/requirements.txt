@@ -1,4 +1,7 @@
-pandas>=2.0.0
-numpy>=1.24.0
-flaml>=2.1.0
-scikit-learn>=1.3.0
+numpy==2.0.2
+pandas==2.2.2
+pyarrow==18.1.0
+scikit-learn==1.6.1
+xgboost==3.1.2
+lightgbm==4.6.0
+pydantic==2.12.3

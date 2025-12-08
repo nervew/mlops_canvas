@@ -7,14 +7,13 @@ LOCATION="${LOCATION:-eastus}"
 ACR_NAME="${ACR_NAME:-mlopstestacr}"
 ACR_SKU="${ACR_SKU:-Basic}"
 
-ENVIRONMENT_NAME="${ENVIRONMENT_NAME:-mlopstestenvironment}"
-APP_NAME="${APP_NAME:-mlopstestapp}"
+ENVIRONMENT_NAME="${ENVIRONMENT_NAME:-mlopstestenvironment4}"
+APP_NAME="${APP_NAME:-mlopstestapp4}"
 
-IMAGE_NAME="${IMAGE_NAME:-mlopstest-api}"
-IMAGE_TAG="${IMAGE_TAG:-latest}"
+IMAGE_NAME="${IMAGE_NAME:-mlopstest4-api}"
+IMAGE_TAG="${IMAGE_TAG:-0.0.3-dev.1}"
 
 TARGET_PORT="${TARGET_PORT:-8000}"
 CPU="${CPU:-0.25}"
 MEMORY="${MEMORY:-0.5Gi}"
 INGRESS="${INGRESS:-external}"
-
